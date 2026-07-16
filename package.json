@@ -1,0 +1,17 @@
+{
+  "name": "admin-vivu360",
+  "version": "1.0.0",
+  "description": "Web quản trị Admin cho App DATN_Vivu360",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "firebase-admin": "^13.10.0"
+  }
+}

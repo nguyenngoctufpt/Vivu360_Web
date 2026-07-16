@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> — Admin Vivu360</title>
+  <meta name="description" content="Trang quản trị Admin cho ứng dụng du lịch Vivu360">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+  <script async src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"
+    onload="window.lucide && window.lucide.createIcons()"></script>
+</head>
+<body>
+  <div class="admin-layout">
+    <!-- Sidebar Overlay (Mobile) -->
+    <div class="sidebar-overlay"></div>
+    
+    <%- include('../partials/sidebar') %>
+    
+    <div class="main-content">
+      <%- include('../partials/header', { title: title }) %>
+      
+      <div class="page-content">
+        <%- body %>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/main.js"></script>
+</body>
+</html>
