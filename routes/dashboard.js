@@ -307,319 +307,189 @@ router.get('/', async (req, res) => {
     </div>
 
     <script>
-      (function runDashboardCharts() {
-        function ensureChartReady(callback, attempts) {
-          attempts = attempts || 0;
-          if (typeof Chart !== 'undefined') {
-            try { callback(); } catch(e) { console.error('Error rendering charts:', e); }
-            return;
-          }
-          if (attempts === 3) {
-            const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-            document.head.appendChild(s);
-          }
-          if (attempts < 40) {
-            setTimeout(function() { ensureChartReady(callback, attempts + 1); }, 150);
-          }
+    (function() {
+      // Wait for full page load to guarantee Chart.js is ready
+      function initCharts() {
+        if (typeof Chart === 'undefined') {
+          // Last resort: inject and retry
+          var s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+          s.onload = function() { setTimeout(buildCharts, 50); };
+          document.head.appendChild(s);
+          return;
+        }
+        buildCharts();
+      }
+
+      function buildCharts() {
+        var baseOpts = {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 600, easing: 'easeOutQuart' },
+          devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        };
+
+        var tooltipCfg = {
+          backgroundColor: 'rgba(8,8,20,0.96)',
+          borderColor: 'rgba(99,102,241,0.35)',
+          borderWidth: 1,
+          titleColor: '#e0e7ff',
+          bodyColor: '#94a3b8',
+          padding: 12,
+          cornerRadius: 10,
+          displayColors: true,
+        };
+
+        function mkChart(id, cfg) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          try {
+            var ex = Chart.getChart(el);
+            if (ex) ex.destroy();
+            new Chart(el.getContext('2d'), cfg);
+          } catch(e) { console.warn('Chart error [' + id + ']:', e); }
         }
 
-        function renderAllCharts() {
-          ensureChartReady(function() {
-
-          const baseOpts = {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
-            resizeDelay: 150,
-          };
-
-          const tooltipStyle = {
-            backgroundColor: 'rgba(10,10,24,0.95)',
-            borderColor: 'rgba(99,102,241,0.28)',
-            borderWidth: 1,
-            titleColor: '#eef0ff',
-            bodyColor: '#8892b8',
-            padding: 10,
-            cornerRadius: 8,
-          };
-
-          // ── Helper: Safe Chart Creator with Native Fallback ──
-          function safeCreateChart(canvasEl, config, fallbackFn) {
-            if (!canvasEl) return;
-            try {
-              if (typeof Chart !== 'undefined') {
-                const existing = Chart.getChart(canvasEl);
-                if (existing) existing.destroy();
-                new Chart(canvasEl.getContext('2d'), config);
-                return;
-              }
-            } catch(e) {
-              console.warn('Chart.js rendering warning, using native fallback:', e);
-            }
-            if (typeof fallbackFn === 'function') {
-              fallbackFn(canvasEl);
-            }
-          }
-
-          // Native 2D Canvas Radar Chart Renderer (Guarantee 100% display)
-          function drawNativeRadar(canvas) {
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const labels = ['Người dùng', 'Bài viết', 'Nhóm chat', 'Địa điểm 360', 'An toàn', 'Đồng bộ Data'];
-            const values = [${scoreUsers}, ${scorePosts}, ${scoreGroups}, ${scoreDestinations}, ${scoreSafety}, ${scoreSync}];
-            
-            const rect = canvas.getBoundingClientRect();
-            const w = rect.width || canvas.parentElement.offsetWidth || 360;
-            const h = rect.height || canvas.parentElement.offsetHeight || 240;
-            canvas.width = w * (window.devicePixelRatio || 1);
-            canvas.height = h * (window.devicePixelRatio || 1);
-            ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-
-            const cx = w / 2;
-            const cy = h / 2;
-            const radius = Math.min(cx, cy) - 35;
-            const n = labels.length;
-
-            ctx.clearRect(0, 0, w, h);
-
-            // Draw concentric web rings
-            [0.2, 0.4, 0.6, 0.8, 1.0].forEach(level => {
-              ctx.beginPath();
-              for (let i = 0; i < n; i++) {
-                const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
-                const x = cx + radius * level * Math.cos(angle);
-                const y = cy + radius * level * Math.sin(angle);
-                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-              }
-              ctx.closePath();
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-              ctx.lineWidth = 1;
-              ctx.stroke();
-            });
-
-            // Draw radial axes & labels
-            for (let i = 0; i < n; i++) {
-              const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
-              const x = cx + radius * Math.cos(angle);
-              const y = cy + radius * Math.sin(angle);
-
-              ctx.beginPath();
-              ctx.moveTo(cx, cy);
-              ctx.lineTo(x, y);
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-              ctx.stroke();
-
-              // Text Labels
-              const lx = cx + (radius + 16) * Math.cos(angle);
-              const ly = cy + (radius + 16) * Math.sin(angle);
-              ctx.fillStyle = '#94a3b8';
-              ctx.font = 'bold 10px Inter, sans-serif';
-              ctx.textAlign = Math.abs(Math.cos(angle)) < 0.1 ? 'center' : (Math.cos(angle) > 0 ? 'left' : 'right');
-              ctx.textBaseline = Math.abs(Math.sin(angle)) < 0.1 ? 'middle' : (Math.sin(angle) > 0 ? 'top' : 'bottom');
-              ctx.fillText(labels[i] + ' (' + values[i] + '%)', lx, ly);
-            }
-
-            // Fill Radar Polygon
-            ctx.beginPath();
-            for (let i = 0; i < n; i++) {
-              const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
-              const val = Math.min(100, Math.max(0, values[i])) / 100;
-              const x = cx + radius * val * Math.cos(angle);
-              const y = cy + radius * val * Math.sin(angle);
-              if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(99, 102, 241, 0.30)';
-            ctx.fill();
-            ctx.strokeStyle = '#818cf8';
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-
-            // Glowing Points
-            for (let i = 0; i < n; i++) {
-              const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
-              const val = Math.min(100, Math.max(0, values[i])) / 100;
-              const x = cx + radius * val * Math.cos(angle);
-              const y = cy + radius * val * Math.sin(angle);
-
-              ctx.beginPath();
-              ctx.arc(x, y, 4, 0, Math.PI * 2);
-              ctx.fillStyle = '#38bdf8';
-              ctx.fill();
-              ctx.strokeStyle = '#ffffff';
-              ctx.lineWidth = 1.5;
-              ctx.stroke();
-            }
-          }
-
-          // ── 0. Overview Bar Chart ──
-          const barEl = document.getElementById('overviewBarChart');
-          safeCreateChart(barEl, {
-            type: 'bar',
-            data: {
-              labels: ['Người dùng', 'Bài viết', 'Nhóm chat', 'Điểm VR 360', 'Vé đặt chỗ', 'Lượt thích', 'Bình luận', 'Bài có ảnh', 'Gắn vị trí', 'Vi phạm'],
-              datasets: [{
-                label: 'Số lượng thực tế',
-                data: [${allUsersCount}, ${allPostsCount}, ${allGroupsCount}, ${stats.totalObjects}, ${stats.totalTickets}, ${totalLikes}, ${totalComments}, ${postsWithImages}, ${postsWithLocation}, ${pendingReportsCount}],
-                backgroundColor: [
-                  'rgba(99, 102, 241, 0.8)',
-                  'rgba(16, 185, 129, 0.8)',
-                  'rgba(168, 85, 247, 0.8)',
-                  'rgba(34, 211, 238, 0.8)',
-                  'rgba(251, 191, 36, 0.8)',
-                  'rgba(239, 68, 68, 0.8)',
-                  'rgba(245, 158, 11, 0.8)',
-                  'rgba(52, 211, 153, 0.8)',
-                  'rgba(129, 140, 248, 0.8)',
-                  'rgba(244, 63, 94, 0.8)'
-                ],
-                borderColor: [
-                  '#818cf8',
-                  '#10b981',
-                  '#a855f7',
-                  '#22d3ee',
-                  '#fbbf24',
-                  '#ef4444',
-                  '#f59e0b',
-                  '#34d399',
-                  '#818cf8',
-                  '#f43f5e'
-                ],
-                borderWidth: 2,
-                borderRadius: 8,
-                borderSkipped: false,
-              }]
+        /* ── 0. Overview Bar Chart (10 metrics) ── */
+        mkChart('overviewBarChart', {
+          type: 'bar',
+          data: {
+            labels: ['Người dùng','Bài viết','Nhóm chat','Điểm VR 360','Vé','Lượt thích','Bình luận','Bài có ảnh','Gắn vị trí','Vi phạm'],
+            datasets: [{
+              label: 'Thực tế',
+              data: [${allUsersCount},${allPostsCount},${allGroupsCount},${stats.totalObjects},${stats.totalTickets},${totalLikes},${totalComments},${postsWithImages},${postsWithLocation},${pendingReportsCount}],
+              backgroundColor: [
+                'rgba(99,102,241,0.82)','rgba(16,185,129,0.82)','rgba(168,85,247,0.82)',
+                'rgba(34,211,238,0.82)','rgba(251,191,36,0.82)','rgba(239,68,68,0.82)',
+                'rgba(245,158,11,0.82)','rgba(52,211,153,0.82)','rgba(129,140,248,0.82)',
+                'rgba(244,63,94,0.82)'
+              ],
+              borderColor: ['#818cf8','#10b981','#a855f7','#22d3ee','#fbbf24','#ef4444','#f59e0b','#34d399','#818cf8','#f43f5e'],
+              borderWidth: 2,
+              borderRadius: 10,
+              borderSkipped: false,
+            }]
+          },
+          options: {
+            ...baseOpts,
+            plugins: {
+              legend: { display: false },
+              tooltip: { ...tooltipCfg, callbacks: { label: function(c){ return '  ' + c.label + ': ' + c.raw.toLocaleString('vi-VN'); } } }
             },
-            options: {
-              ...baseOpts,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  ...tooltipStyle,
-                  callbacks: {
-                    label: (ctx) => ' ' + ctx.label + ': ' + ctx.raw.toLocaleString('vi-VN') + ' dữ liệu'
-                  }
-                }
+            scales: {
+              x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#94a3b8', font: { size: 10, weight: '700' } } },
+              y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#5a6a96', font: { size: 10 } }, beginAtZero: true }
+            }
+          }
+        });
+
+        /* ── 1. User Growth (Area Line) ── */
+        mkChart('userGrowthChart', {
+          type: 'line',
+          data: {
+            labels: ['T8','T9','T10','T11','T12','T1','T2','T3','T4','T5','T6','T7'],
+            datasets: [{
+              label: 'Người dùng',
+              data: ${JSON.stringify(userGrowthData)},
+              borderColor: '#818cf8',
+              backgroundColor: function(ctx) {
+                var g = ctx.chart.ctx.createLinearGradient(0,0,0,220);
+                g.addColorStop(0,'rgba(99,102,241,0.35)');
+                g.addColorStop(1,'rgba(99,102,241,0.02)');
+                return g;
               },
-              scales: {
-                x: {
-                  grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                  ticks: { color: '#94a3b8', font: { size: 10, weight: '700' } }
-                },
-                y: {
-                  grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                  ticks: { color: '#5a6a96', font: { size: 10 } },
-                  beginAtZero: true
-                }
-              }
-            }
-          });
-
-          // ── 1. User Growth (Area Line) ──
-          const ugEl = document.getElementById('userGrowthChart');
-          safeCreateChart(ugEl, {
-            type: 'line',
-            data: {
-              labels: ['T8','T9','T10','T11','T12','T1','T2','T3','T4','T5','T6','T7'],
-              datasets: [{
-                label: 'Người dùng',
-                data: ${JSON.stringify(userGrowthData)},
-                borderColor: '#818cf8',
-                backgroundColor: 'rgba(99,102,241,0.20)',
-                borderWidth: 2.5,
-                fill: true,
-                tension: 0.42,
-                pointRadius: 4,
-                pointBackgroundColor: '#818cf8',
-                pointBorderColor: '#04040c',
-                pointBorderWidth: 2.5,
-              }]
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.44,
+              pointRadius: 5,
+              pointBackgroundColor: '#818cf8',
+              pointBorderColor: '#04040c',
+              pointBorderWidth: 2.5,
+              pointHoverRadius: 7,
+            }]
+          },
+          options: {
+            ...baseOpts,
+            plugins: {
+              legend: { display: false },
+              tooltip: { ...tooltipCfg, callbacks: { label: function(c){ return '  ' + c.raw.toLocaleString('vi-VN') + ' người dùng'; } } }
             },
-            options: {
-              ...baseOpts,
-              plugins: {
-                legend: { display: false },
-                tooltip: { ...tooltipStyle, callbacks: { label: c => ' ' + c.raw.toLocaleString('vi-VN') + ' người dùng' } }
-              },
-              scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a6a96', font: { size: 10, weight: '600' } } },
-                y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a6a96', font: { size: 10 } } }
-              }
+            scales: {
+              x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a6a96', font: { size: 10, weight: '600' } } },
+              y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#5a6a96', font: { size: 10 } }, beginAtZero: true }
             }
-          });
+          }
+        });
 
-          // ── 2. Post Type Distribution (Doughnut) ──
-          const ptEl = document.getElementById('postTypeChart');
-          const withImages   = ${postsWithImages};
-          const withLocation = ${postsWithLocation};
-          const regular      = Math.max(0, ${allPostsCount} - withImages - withLocation);
-          safeCreateChart(ptEl, {
-            type: 'doughnut',
-            data: {
-              labels: ['Có ảnh', 'Gắn vị trí', 'Thông thường'],
-              datasets: [{
-                data: [withImages, withLocation, regular],
-                backgroundColor: ['rgba(52,211,153,0.85)', 'rgba(129,140,248,0.85)', 'rgba(148,163,184,0.5)'],
-                borderColor: '#04040c',
-                borderWidth: 3,
-              }]
-            },
-            options: {
-              ...baseOpts,
-              cutout: '72%',
-              plugins: {
-                legend: { display: false },
-                tooltip: { ...tooltipStyle, callbacks: {
-                  label: c => ' ' + c.label + ': ' + c.raw + ' bài'
-                }}
-              }
+        /* ── 2. Post Type Doughnut ── */
+        var withImages   = ${postsWithImages};
+        var withLocation = ${postsWithLocation};
+        var regular      = Math.max(0, ${allPostsCount} - withImages - withLocation);
+        mkChart('postTypeChart', {
+          type: 'doughnut',
+          data: {
+            labels: ['Có ảnh','Gắn vị trí','Thông thường'],
+            datasets: [{
+              data: [withImages, withLocation, regular],
+              backgroundColor: ['rgba(52,211,153,0.88)','rgba(129,140,248,0.88)','rgba(100,116,139,0.55)'],
+              borderColor: '#080814',
+              borderWidth: 4,
+              hoverOffset: 8,
+            }]
+          },
+          options: {
+            ...baseOpts,
+            cutout: '74%',
+            plugins: {
+              legend: { display: false },
+              tooltip: { ...tooltipCfg, callbacks: { label: function(c){ return '  ' + c.label + ': ' + c.raw + ' bài'; } } }
             }
-          });
+          }
+        });
 
-          // ── 3. Export Controls ──
-          document.getElementById('btnExportBarChartPNG')?.addEventListener('click', () => {
-            const canvas = document.getElementById('overviewBarChart');
-            if (!canvas) return;
-            const link = document.createElement('a');
-            link.download = 'Vivu360_System_Overview_BarChart.png';
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-          });
+        /* ── Export PNG ── */
+        var btnPng = document.getElementById('btnExportBarChartPNG');
+        if (btnPng) btnPng.addEventListener('click', function() {
+          var c = document.getElementById('overviewBarChart');
+          if (!c) return;
+          var a = document.createElement('a');
+          a.download = 'Vivu360_Dashboard_Chart.png';
+          a.href = c.toDataURL('image/png');
+          a.click();
+        });
 
-          document.getElementById('btnExportBarChartCSV')?.addEventListener('click', () => {
-            const rows = [
-              ["Danh Muc Thong Ke", "So Luong Thuc Te"],
-              ["Nguoi dung", "${allUsersCount}"],
-              ["Bai viet cong dong", "${allPostsCount}"],
-              ["Nhom chat", "${allGroupsCount}"],
-              ["Diem VR 360", "${stats.totalObjects}"],
-              ["Ve dat cho", "${stats.totalTickets}"],
-              ["Luot thich", "${totalLikes}"],
-              ["Luot binh luan", "${totalComments}"],
-              ["Bai dang co anh", "${postsWithImages}"],
-              ["Bai dang gan vi tri", "${postsWithLocation}"],
-              ["Bao cao vi pham", "${pendingReportsCount}"]
-            ];
-            const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', 'Vivu360_System_Overview_Full_Report.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          });
-          }); // end ensureChartReady
-        }
+        /* ── Export CSV ── */
+        var btnCsv = document.getElementById('btnExportBarChartCSV');
+        if (btnCsv) btnCsv.addEventListener('click', function() {
+          var rows = [
+            ['Danh muc','So luong'],
+            ['Nguoi dung','${allUsersCount}'],
+            ['Bai viet','${allPostsCount}'],
+            ['Nhom chat','${allGroupsCount}'],
+            ['Diem VR 360','${stats.totalObjects}'],
+            ['Ve dat cho','${stats.totalTickets}'],
+            ['Luot thich','${totalLikes}'],
+            ['Binh luan','${totalComments}'],
+            ['Bai co anh','${postsWithImages}'],
+            ['Gan vi tri','${postsWithLocation}'],
+            ['Vi pham','${pendingReportsCount}']
+          ];
+          var csv = 'data:text/csv;charset=utf-8,\uFEFF' + rows.map(function(r){ return r.join(','); }).join('\n');
+          var a = document.createElement('a');
+          a.setAttribute('href', encodeURI(csv));
+          a.setAttribute('download', 'Vivu360_System_Report.csv');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        });
+      }
 
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-          setTimeout(renderAllCharts, 10);
-        } else {
-          document.addEventListener('DOMContentLoaded', renderAllCharts);
-        }
-      })();
+      if (document.readyState === 'complete') {
+        initCharts();
+      } else {
+        window.addEventListener('load', initCharts);
+      }
+    })();
     </script>
   `;
 
