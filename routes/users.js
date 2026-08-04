@@ -508,12 +508,4 @@ router.post('/:uid/reset-password', requirePermission('users.reset'), async (req
   res.redirect('/users?msg=updated');
 });
 
- 
-
-// ── POST /users/:uid/toggle-status ──────────────────────────
-router.post('/:uid/toggle-status', requirePermission('users.ban'), async (req, res) => {
-  await toggleUserStatus(req.params.uid);
-  res.redirect('/users?msg=updated');
-});
-
 module.exports = router;
