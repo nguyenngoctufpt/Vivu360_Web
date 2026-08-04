@@ -51,13 +51,6 @@ router.get('/', async (req, res) => {
 
   const combinedUsersList = mongoUsers.length > 0 ? mongoUsers : firebaseUsers;
 
-  const rankDist = {
-    'Đồng': combinedUsersList.filter(u => u.rank === 'Đồng' || u.rank === 'Bronze').length,
-    'Bạc': combinedUsersList.filter(u => u.rank === 'Bạc' || u.rank === 'Silver').length,
-    'Vàng': combinedUsersList.filter(u => u.rank === 'Vàng' || u.rank === 'Gold').length,
-    'Bạch Kim': combinedUsersList.filter(u => u.rank === 'Bạch Kim' || u.rank === 'Platinum').length,
-    'Kim Cương': combinedUsersList.filter(u => u.rank === 'Kim Cương' || u.rank === 'Diamond').length,
-  };
 
   const body = `
     <!-- Page Title -->
@@ -223,23 +216,21 @@ router.get('/', async (req, res) => {
         </div>
       </div>
 
-      <!-- Phân bố hạng thành viên -->
+      <!-- Phân bố loại bài viết -->
       <div class="chart-card" style="display:flex;flex-direction:column;">
         <div class="chart-card-header" style="margin-bottom:10px;">
           <div>
-            <div class="chart-card-title">Hạng thành viên</div>
-            <div class="chart-card-subtitle">Phân bố thứ hạng người dùng</div>
+            <div class="chart-card-title">Phân bố Bài viết</div>
+            <div class="chart-card-subtitle">Cơ cấu nội dung cộng đồng (${allPostsCount} bài viết)</div>
           </div>
         </div>
         <div style="position:relative;height:175px;flex:1;">
-          <canvas id="rankChart"></canvas>
+          <canvas id="postTypeChart"></canvas>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:12px;justify-content:center;">
-          <span style="font-size:10px;font-weight:700;color:#cd7f32;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#cd7f32;display:inline-block;"></span>Bronze</span>
-          <span style="font-size:10px;font-weight:700;color:#b0b8d4;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#b0b8d4;display:inline-block;"></span>Silver</span>
-          <span style="font-size:10px;font-weight:700;color:#f59e0b;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>Gold</span>
-          <span style="font-size:10px;font-weight:700;color:var(--cyan);display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#22d3ee;display:inline-block;"></span>Platinum</span>
-          <span style="font-size:10px;font-weight:700;color:var(--purple);display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#a855f7;display:inline-block;"></span>Diamond</span>
+          <span style="font-size:10px;font-weight:700;color:#34d399;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;"></span>Có ảnh</span>
+          <span style="font-size:10px;font-weight:700;color:#818cf8;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#818cf8;display:inline-block;"></span>Gắn vị trí</span>
+          <span style="font-size:10px;font-weight:700;color:#94a3b8;display:flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#94a3b8;display:inline-block;"></span>Thông thường</span>
         </div>
       </div>
     </div>
@@ -263,7 +254,6 @@ router.get('/', async (req, res) => {
             <thead>
               <tr>
                 <th>Người dùng</th>
-                <th>Hạng</th>
                 <th>Trạng thái</th>
                 <th>Ngày tham gia</th>
               </tr>
@@ -282,11 +272,10 @@ router.get('/', async (req, res) => {
                     </div>
                   </div>
                 </td>
-                <td><span class="badge-rank ${(u.rank || 'bronze').toLowerCase().replace(' ', '-')}">${u.rank || 'Bronze'}</span></td>
                 <td><span class="badge-status ${u.status === 'locked' || u.disabled ? 'locked' : 'active'}">${u.status === 'locked' || u.disabled ? 'Đã khóa' : 'Hoạt động'}</span></td>
                 <td style="color:var(--text-dim);font-size:11px;">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
               </tr>
-              `).join('') || `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-dim);">Chưa có dữ liệu</td></tr>`}
+              `).join('') || `<tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text-dim);">Chưa có dữ liệu</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -561,17 +550,18 @@ router.get('/', async (req, res) => {
             }
           });
 
-          // ── 2. Rank Distribution (Doughnut) ──
-          const rkEl = document.getElementById('rankChart');
-          const rkData = ${JSON.stringify(Object.values(rankDist))};
-          const total  = rkData.reduce((a,b) => a+b, 0);
-          safeCreateChart(rkEl, {
+          // ── 2. Post Type Distribution (Doughnut) ──
+          const ptEl = document.getElementById('postTypeChart');
+          const withImages   = ${postsWithImages};
+          const withLocation = ${postsWithLocation};
+          const regular      = Math.max(0, ${allPostsCount} - withImages - withLocation);
+          safeCreateChart(ptEl, {
             type: 'doughnut',
             data: {
-              labels: ${JSON.stringify(Object.keys(rankDist))},
+              labels: ['Có ảnh', 'Gắn vị trí', 'Thông thường'],
               datasets: [{
-                data: rkData,
-                backgroundColor: ['#cd7f32','#b0b8d4','#f59e0b','#22d3ee','#a855f7'],
+                data: [withImages, withLocation, regular],
+                backgroundColor: ['rgba(52,211,153,0.85)', 'rgba(129,140,248,0.85)', 'rgba(148,163,184,0.5)'],
                 borderColor: '#04040c',
                 borderWidth: 3,
               }]
@@ -582,7 +572,7 @@ router.get('/', async (req, res) => {
               plugins: {
                 legend: { display: false },
                 tooltip: { ...tooltipStyle, callbacks: {
-                  label: c => ' ' + c.label + ': ' + c.raw + (total ? ' (' + Math.round(c.raw/total*100) + '%)' : '')
+                  label: c => ' ' + c.label + ': ' + c.raw + ' bài'
                 }}
               }
             }
