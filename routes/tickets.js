@@ -2,19 +2,21 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const { requirePermission } = require('../middleware/rbac');
-const { mockTickets } = require('../config/firebase');
+const { getTickets, mockTickets } = require('../config/firebase');
 
 function getStatusIcon(s) { return { confirmed:'check-circle', pending:'clock', cancelled:'x-circle' }[s] || 'help-circle'; }
 function getStatusLabel(s) { return { confirmed:'Đã xác nhận', pending:'Chờ duyệt', cancelled:'Đã hủy' }[s] || s; }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { q = '', status = '', from = '', to = '', msg = '' } = req.query;
   const activeFilters = [q, status, from, to].filter(Boolean).length;
 
-  const filtered = mockTickets.filter(t => {
-    const matchQ = !q || t.code.toLowerCase().includes(q.toLowerCase()) ||
-                       t.userName.toLowerCase().includes(q.toLowerCase()) ||
-                       t.destination.toLowerCase().includes(q.toLowerCase());
+  const tickets = await getTickets();
+
+  const filtered = tickets.filter(t => {
+    const matchQ = !q || String(t.code || '').toLowerCase().includes(q.toLowerCase()) ||
+                       String(t.userName || '').toLowerCase().includes(q.toLowerCase()) ||
+                       String(t.destination || '').toLowerCase().includes(q.toLowerCase());
     const matchS = !status || t.status === status;
     const matchFrom = !from || t.date >= from;
     const matchTo   = !to   || t.date <= to;
@@ -160,7 +162,8 @@ router.get('/export.xlsx', async (req, res) => {
   ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF22c55e' } };
   ws.getRow(1).height = 22;
-  mockTickets.forEach(t => ws.addRow({ ...t, status: getStatusLabel(t.status) }));
+  const tickets = await getTickets();
+  tickets.forEach(t => ws.addRow({ ...t, status: getStatusLabel(t.status) }));
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename=tickets.xlsx');
   await wb.xlsx.write(res);

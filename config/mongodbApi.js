@@ -216,28 +216,41 @@ async function getAllMongoGroups() {
 
   // 2. Thử truy vấn danh sách nhóm theo từng người dùng MongoDB thực tế
   const users = await getMongoUsers();
-  const results = await Promise.allSettled(
-    users
-      .filter(user => user.firebaseUid || user._id)
-      .map(user => getGroupsByMember(user.firebaseUid || user._id))
-  );
+  if (users.length > 0) {
+    const results = await Promise.allSettled(
+      users
+        .filter(user => user.firebaseUid || user._id)
+        .map(user => getGroupsByMember(user.firebaseUid || user._id))
+    );
 
-  const groupMap = new Map();
-  results.forEach(result => {
-    if (result.status !== 'fulfilled' || !Array.isArray(result.value)) return;
-    result.value.forEach(group => {
-      const groupId = String(group._id || group.id || '');
-      if (groupId && !groupMap.has(groupId)) {
-        groupMap.set(groupId, group);
-      }
+    const groupMap = new Map();
+    results.forEach(result => {
+      if (result.status !== 'fulfilled' || !Array.isArray(result.value)) return;
+      result.value.forEach(group => {
+        const groupId = String(group._id || group.id || '');
+        if (groupId && !groupMap.has(groupId)) {
+          groupMap.set(groupId, group);
+        }
+      });
     });
-  });
 
-  return Array.from(groupMap.values()).sort((a, b) => {
-    const dateA = new Date(a.createdAt || 0).getTime();
-    const dateB = new Date(b.createdAt || 0).getTime();
-    return dateB - dateA;
-  });
+    const list = Array.from(groupMap.values()).sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+
+    if (list.length > 0) return list;
+  }
+
+  // 3. Firestore fallback
+  try {
+    const { getFirestoreGroups } = require('./firebase');
+    const fsGroups = await getFirestoreGroups();
+    if (fsGroups && fsGroups.length > 0) return fsGroups;
+  } catch(e) {}
+
+  return fallbackGroups;
 }
 
 async function getPostsByUser(firebaseUid) {

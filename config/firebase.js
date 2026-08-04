@@ -413,28 +413,35 @@ async function getDashboardStats() {
     } catch(e) {}
   }
 
-  // --- Destinations: Firestore → mock
+  // --- Destinations: MongoDB API → Firestore → mock
   let destinationsList = [];
   try {
-    if (isFirebaseConnected) {
+    const { getAllMongoDestinations } = require('./mongodbApi');
+    const mongoD = await getAllMongoDestinations();
+    if (mongoD && mongoD.length > 0) destinationsList = mongoD;
+  } catch(e) {}
+  if (destinationsList.length === 0 && isFirebaseConnected) {
+    try {
       const fsD = await getFirestoreDestinations();
       if (fsD.length > 0) destinationsList = fsD;
-    }
-  } catch(e) {}
+    } catch(e) {}
+  }
   if (destinationsList.length === 0) destinationsList = mockDestinations;
   const totalObjects = destinationsList.length;
 
-  const totalTickets = mockTickets.length;
-  const confirmedTickets = mockTickets.filter(t => t.status === 'confirmed').length;
-  const pendingTickets   = mockTickets.filter(t => t.status === 'pending').length;
-  const cancelledTickets = mockTickets.filter(t => t.status === 'cancelled').length;
+  // --- Tickets: Firestore / API → mock
+  const ticketsList = await getTickets();
+  const totalTickets = ticketsList.length;
+  const confirmedTickets = ticketsList.filter(t => t.status === 'confirmed').length;
+  const pendingTickets   = ticketsList.filter(t => t.status === 'pending').length;
+  const cancelledTickets = ticketsList.filter(t => t.status === 'cancelled').length;
 
   const parsePrice = (pStr) => {
     if (!pStr) return 0;
-    const num = parseInt(pStr.replace(/[^0-9]/g, ''), 10);
+    const num = parseInt(String(pStr).replace(/[^0-9]/g, ''), 10);
     return isNaN(num) ? 0 : num;
   };
-  const confirmedTicketsArray = mockTickets.filter(t => t.status === 'confirmed');
+  const confirmedTicketsArray = ticketsList.filter(t => t.status === 'confirmed');
   const revenueVal = confirmedTicketsArray.reduce((sum, t) => sum + parsePrice(t.price) * (t.guests || 1), 0);
   const totalRevenue = revenueVal.toLocaleString('vi-VN') + 'đ';
 
@@ -445,7 +452,7 @@ async function getDashboardStats() {
   ];
 
   const regionCounts = {};
-  mockTickets.forEach(t => {
+  ticketsList.forEach(t => {
     const key = t.region || 'Khác';
     regionCounts[key] = (regionCounts[key] || 0) + (t.guests || 1);
   });
@@ -560,6 +567,46 @@ async function getFirestoreDestinations() {
   return [];
 }
 
+async function getFirestoreTickets() {
+  if (!isFirebaseConnected) return [];
+  try {
+    const collections = ['tickets', 'bookings', 'orders', 'reservations'];
+    for (const colName of collections) {
+      const snap = await db.collection(colName).limit(100).get();
+      if (!snap.empty) {
+        const tickets = [];
+        snap.forEach(doc => {
+          const data = doc.data();
+          tickets.push({
+            code: doc.id,
+            id: doc.id,
+            ...data,
+          });
+        });
+        console.log(`🔥 Đã tải ${tickets.length} vé du lịch thực tế từ Firestore collection '${colName}'`);
+        return tickets;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Lỗi đọc Firestore tickets:', e.message);
+  }
+  return [];
+}
+
+async function getTickets() {
+  if (isFirebaseConnected) {
+    const fsTickets = await getFirestoreTickets();
+    if (fsTickets.length > 0) return fsTickets;
+  }
+  try {
+    const { request, extractList } = require('./mongodbApi');
+    const apiRes = await request('/tickets');
+    const apiTickets = extractList(apiRes);
+    if (apiTickets && apiTickets.length > 0) return apiTickets;
+  } catch(e) {}
+  return mockTickets;
+}
+
 module.exports = {
   admin,
   db,
@@ -577,9 +624,11 @@ module.exports = {
   mockChatGroups,
   getDashboardStats,
   getUsers,
+  getTickets,
   getFirestorePosts,
   getFirestoreGroups,
   getFirestoreDestinations,
+  getFirestoreTickets,
   updateUser,
   deleteUser,
   toggleUserStatus,

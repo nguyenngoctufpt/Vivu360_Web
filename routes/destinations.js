@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { requirePermission } = require('../middleware/rbac');
-const { mockDestinations } = require('../config/firebase');
+const { mockDestinations, getFirestoreDestinations } = require('../config/firebase');
+const { getAllMongoDestinations } = require('../config/mongodbApi');
 
 // Lưu ảnh 360° theo id (in-memory)
 const tour360Images = {};
@@ -11,10 +11,26 @@ mockDestinations.forEach(d => {
     : [];
 });
 
-router.get('/', (req, res) => {
+async function getActiveDestinations() {
+  let list = [];
+  try {
+    const mongoList = await getAllMongoDestinations();
+    if (mongoList && mongoList.length > 0) list = mongoList;
+  } catch(e) {}
+  if (list.length === 0) {
+    try {
+      const fsList = await getFirestoreDestinations();
+      if (fsList && fsList.length > 0) list = fsList;
+    } catch(e) {}
+  }
+  return list.length > 0 ? list : mockDestinations;
+}
+
+router.get('/', async (req, res) => {
   const { type = '', msg = null } = req.query;
 
-  const filtered = mockDestinations.filter(d => !type || d.type === type);
+  const destinationsList = await getActiveDestinations();
+  const filtered = destinationsList.filter(d => !type || d.type === type);
 
   const rows = filtered.map(d => {
     const images360 = tour360Images[d.id] || [];
@@ -100,7 +116,7 @@ router.get('/', (req, res) => {
     <div class="page-title-row">
       <div class="page-title">
         <h1>Điểm đến & Tours</h1>
-        <p>Quản lý ${filtered.length}/${mockDestinations.length} điểm đến — bao gồm ảnh Tour 360°</p>
+        <p>Quản lý ${filtered.length}/${destinationsList.length} điểm đến — bao gồm ảnh Tour 360°</p>
       </div>
       <div style="display:flex;gap:12px;align-items:center;">
         <div class="filter-bar">

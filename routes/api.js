@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getDashboardStats, getUsers, mockDestinations, mockTickets } = require('../config/firebase');
-const { getAllMongoPosts, getAllMongoGroups, getPostsByUser, getMongoUsers } = require('../config/mongodbApi');
+const { getDashboardStats, getUsers, getTickets, getFirestoreDestinations, mockDestinations } = require('../config/firebase');
+const { getAllMongoPosts, getAllMongoGroups, getPostsByUser, getMongoUsers, getAllMongoDestinations } = require('../config/mongodbApi');
 
 // ─── Health & Ping ─────────────────────────────────────────
 router.all('/health', (req, res) => {
@@ -45,11 +45,15 @@ router.get('/stats', async (req, res) => {
 });
 
 // ─── Destinations & Tours API ──────────────────────────────
-router.get(['/destinations', '/tours'], (req, res) => {
+router.get(['/destinations', '/tours'], async (req, res) => {
   const { type = '', region = '', zone = '' } = req.query;
-  let filtered = mockDestinations;
+  let fetched = await getAllMongoDestinations();
+  if (!fetched || fetched.length === 0) {
+    fetched = await getFirestoreDestinations();
+  }
+  let filtered = (fetched && fetched.length > 0) ? fetched : mockDestinations;
   if (type) filtered = filtered.filter(d => d.type === type);
-  if (region) filtered = filtered.filter(d => d.region.toLowerCase().includes(region.toLowerCase()));
+  if (region) filtered = filtered.filter(d => (d.region || '').toLowerCase().includes(region.toLowerCase()));
   if (zone) filtered = filtered.filter(d => d.zone === zone);
   
   res.json({ success: true, total: filtered.length, data: filtered });
@@ -130,8 +134,9 @@ router.get(['/chat/groups', '/groups'], async (req, res) => {
 });
 
 // ─── Tickets API ───────────────────────────────────────────
-router.get('/tickets', (req, res) => {
-  res.json({ success: true, total: mockTickets.length, data: mockTickets });
+router.get('/tickets', async (req, res) => {
+  const tickets = await getTickets();
+  res.json({ success: true, total: tickets.length, data: tickets });
 });
 
 router.post('/tickets/:code/confirm', (req, res) => {
