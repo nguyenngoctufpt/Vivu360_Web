@@ -31,7 +31,7 @@ const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
   </div>
 
   <!-- Quản lý dữ liệu -->
-  <% if (can('users.read') || can('posts') || isSuperAdmin) { %>
+  <% if (can('users.read') || can('posts') || can('chat') || isSuperAdmin) { %>
   <div class="sidebar-section">
     <div class="sidebar-section-title">Quản lý dữ liệu</div>
     <nav class="sidebar-nav">
@@ -48,6 +48,11 @@ const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
     </nav>
   </div>
   <% } %>
+      <% if (can('chat')) { %>
+      <a href="/chat" class="sidebar-link <%= currentPath.startsWith('/chat') ? 'active' : '' %>">
+        <i data-lucide="shield-alert"></i> Admin Trưởng nhóm
+      </a>
+      <% } %>
 
   <!-- Tương tác -->
   <% if (can('notifications') || can('banners')) { %>

@@ -4,10 +4,9 @@ const ExcelJS = require('exceljs');
 const { requirePermission } = require('../middleware/rbac');
 const {
   getUsers,
-  deleteUser,
   toggleUserStatus,
   resetUserPassword,
-  mockTickets
+  deleteUser,
 } = require('../config/firebase');
 
 function getRankClass(rank) {
@@ -67,9 +66,8 @@ router.get('/', async (req, res) => {
             data-tooltip="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}">
             <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}" style="width:14px;height:14px"></i>
           </button>
-          <button class="btn btn-icon" style="color:var(--red)"
-            data-action="delete-user" data-uid="${u.uid}" data-name="${u.name}"
-            data-tooltip="Xóa tài khoản">
+          <button class="btn btn-icon" style="color:var(--red)" data-tooltip="Xóa vĩnh viễn"
+            data-action="delete-user" data-uid="${u.uid}" data-name="${encodeURIComponent(u.name || '')}">
             <i data-lucide="trash-2" style="width:14px;height:14px"></i>
           </button>
         </div>
@@ -81,8 +79,9 @@ router.get('/', async (req, res) => {
   const rankCounts   = users.reduce((acc, u) => { acc[u.rank] = (acc[u.rank]||0)+1; return acc; }, {});
 
   const body = `
-    ${msg === 'deleted' ? `<div class="alert-bar red"><i data-lucide="check-circle" style="width:16px;height:16px"></i> Đã xóa tài khoản thành công.</div>` : ''}
+     
     ${msg === 'updated' ? `<div class="alert-bar green"><i data-lucide="check-circle" style="width:16px;height:16px"></i> Đã cập nhật thông tin thành công.</div>` : ''}
+    ${msg === 'deleted' ? `<div class="alert-bar green"><i data-lucide="check-circle" style="width:16px;height:16px"></i> Đã xóa tài khoản thành công khỏi hệ thống.</div>` : ''}
 
     <div class="page-title-row">
       <div class="page-title">
@@ -207,73 +206,125 @@ router.get('/', async (req, res) => {
       </div>
     </div>
 
-    <!-- ── MODAL XEM CHI TIẾT ── -->
+    <!-- ── MODAL XEM CHI TIẾT TÀI KHOẢN ── -->
     <div id="viewModal" class="modal-overlay" style="display:none">
-      <div class="modal-box" style="max-width:500px;">
-        <div class="modal-header">
+      <div class="modal-box" style="max-width:540px;">
+        <!-- Header -->
+        <div class="modal-header" style="background:var(--accent-glow2);border-bottom:1px solid var(--border);">
           <div style="display:flex;align-items:center;gap:14px;">
-            <img id="vAvatar" src="" style="width:52px;height:52px;border-radius:12px;object-fit:cover;">
+            <img id="vAvatar" src="" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:2px solid var(--accent-light);">
             <div>
-              <div id="vName" style="font-size:18px;font-weight:800;color:var(--text-primary)"></div>
-              <div id="vEmail" style="font-size:12px;color:var(--text-muted)"></div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div id="vName" style="font-size:18px;font-weight:800;color:var(--text-primary)"></div>
+                <span id="vLevelBadge" style="font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(99,102,241,0.2);color:var(--accent-light);font-weight:700;">Cấp 1</span>
+              </div>
+              <div id="vEmail" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
             </div>
           </div>
           <button class="btn btn-icon modal-close" data-modal="viewModal"><i data-lucide="x" style="width:16px;height:16px"></i></button>
         </div>
-        <div style="padding:20px 28px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-          <div class="detail-item"><div class="detail-label">UID</div><div id="vUid" class="detail-value mono"></div></div>
-          <div class="detail-item"><div class="detail-label">Điện thoại</div><div id="vPhone" class="detail-value"></div></div>
-          <div class="detail-item"><div class="detail-label">Hạng</div><div id="vRank" class="detail-value"></div></div>
-          <div class="detail-item"><div class="detail-label">Điểm tích lũy</div><div id="vPoints" class="detail-value" style="color:var(--accent-light);font-weight:800"></div></div>
-          <div class="detail-item"><div class="detail-label">Trạng thái</div><div id="vStatus" class="detail-value"></div></div>
-          <div class="detail-item"><div class="detail-label">Ngày tạo</div><div id="vCreated" class="detail-value"></div></div>
+
+        <!-- Body Content -->
+        <div style="padding:22px 28px;">
+          <!-- Highlight Stats Cards -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;">
+            <div style="background:var(--bg-input);padding:12px;border-radius:12px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:10px;color:var(--text-dim);font-weight:800;text-transform:uppercase;">Hạng</div>
+              <div id="vRank" style="margin-top:4px;"></div>
+            </div>
+            <div style="background:var(--bg-input);padding:12px;border-radius:12px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:10px;color:var(--text-dim);font-weight:800;text-transform:uppercase;">Điểm thưởng</div>
+              <div id="vPoints" style="font-size:15px;font-weight:900;color:var(--accent-light);margin-top:4px;"></div>
+            </div>
+            <div style="background:var(--bg-input);padding:12px;border-radius:12px;border:1px solid var(--border);text-align:center;">
+              <div style="font-size:10px;color:var(--text-dim);font-weight:800;text-transform:uppercase;">Trạng thái</div>
+              <div id="vStatus" style="margin-top:4px;"></div>
+            </div>
+          </div>
+
+          <!-- Info Details Grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-bottom:18px;">
+            <div class="detail-item">
+              <div class="detail-label">Mã định danh (UID)</div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div id="vUid" class="detail-value mono" style="font-size:11px;"></div>
+                <button id="btnCopyUid" class="btn btn-icon" style="width:22px;height:22px;padding:0;display:inline-flex;align-items:center;justify-content:center;" data-tooltip="Sao chép UID">
+                  <i data-lucide="copy" style="width:12px;height:12px;"></i>
+                </button>
+              </div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Số điện thoại</div>
+              <div id="vPhone" class="detail-value"></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Ngày khởi tạo</div>
+              <div id="vCreated" class="detail-value"></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Đồng bộ Hệ thống</div>
+              <div style="font-size:12px;color:var(--green);font-weight:600;display:flex;align-items:center;gap:4px;">
+                <i data-lucide="check-circle" style="width:13px;height:13px;"></i> Auth & Mongo Active
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity & Tickets -->
+          <div style="border-top:1px solid var(--border);padding-top:14px;">
+            <div class="detail-label" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+              <span>Địa điểm Check-in & Vé du lịch</span>
+              <span style="font-size:10px;color:var(--accent-light);font-weight:600;">Vivu360 Activity</span>
+            </div>
+            <div id="vTickets" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
         </div>
-        <div style="padding:0 28px 20px;border-top:1px solid var(--border);padding-top:16px;">
-          <div class="detail-label" style="margin-bottom:10px;">Vé đặt gần đây</div>
-          <div id="vTickets" style="display:flex;flex-direction:column;gap:6px;"></div>
-        </div>
-        <div style="padding:16px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;">
-          <form id="resetPwdForm" method="POST" action="">
-            <button type="submit" class="btn btn-warning" style="font-size:12px;">
-              <i data-lucide="key-round" style="width:14px;height:14px"></i> Reset mật khẩu
+
+        <!-- Footer Action Buttons -->
+        <div style="padding:16px 28px;border-top:1px solid var(--border);background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:space-between;">
+          <form id="toggleUserStatusForm" method="POST" action="" style="display:inline;">
+            <button id="btnToggleStatusModal" type="submit" class="btn btn-secondary" style="font-size:12px;">
+              <i data-lucide="lock" style="width:14px;height:14px"></i> <span id="vToggleStatusText">Khóa tài khoản</span>
             </button>
           </form>
-          <button class="btn btn-secondary modal-close" data-modal="viewModal">Đóng</button>
+          <div style="display:flex;gap:8px;">
+            <form id="resetPwdForm" method="POST" action="" style="display:inline;">
+              <button type="submit" class="btn btn-warning" style="font-size:12px;">
+                <i data-lucide="key-round" style="width:14px;height:14px"></i> Reset mật khẩu
+              </button>
+            </form>
+            <button class="btn btn-secondary modal-close" data-modal="viewModal">Đóng</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ── MODAL XÓA ── -->
+    <!-- ── MODAL XÓA NGƯỜI DÙNG ── -->
     <div id="deleteModal" class="modal-overlay" style="display:none">
-      <div class="modal-box" style="max-width:400px;">
+      <div class="modal-box" style="max-width:420px;">
         <div class="modal-header">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:44px;height:44px;border-radius:10px;background:var(--red-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <i data-lucide="trash-2" style="width:20px;height:20px;color:var(--red)"></i>
-            </div>
-            <div>
-              <div style="font-size:15px;font-weight:800;color:var(--text-primary)">Xóa tài khoản</div>
-              <div style="font-size:11px;color:var(--text-muted)">Không thể hoàn tác</div>
-            </div>
-          </div>
+          <div style="font-size:16px;font-weight:900;color:var(--text-primary);">Xóa tài khoản người dùng</div>
           <button class="btn btn-icon modal-close" data-modal="deleteModal"><i data-lucide="x" style="width:16px;height:16px"></i></button>
         </div>
-        <div style="padding:16px 28px 20px;">
-          <p style="font-size:13px;color:var(--text-secondary);line-height:1.7">
-            Bạn có chắc muốn xóa tài khoản của <strong id="dName" style="color:var(--text-primary)"></strong>?
-            Toàn bộ dữ liệu sẽ bị xóa vĩnh viễn.
+        <div style="padding:22px 28px;">
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
+            Bạn có chắc chắn muốn xóa tài khoản của <strong id="delUserName" style="color:var(--text-primary)"></strong> không?
+          </p>
+          <p style="font-size:11px;color:var(--red);margin-top:10px;">
+            ⚠️ Thao tác này sẽ xóa vĩnh viễn dữ liệu người dùng khỏi Firebase Auth, Firestore và MongoDB.
           </p>
         </div>
-        <div style="padding:14px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;">
-          <button class="btn btn-secondary modal-close" data-modal="deleteModal">Hủy bỏ</button>
-          <form id="deleteForm" method="POST" action="" style="margin:0">
-            <button type="submit" class="btn btn-danger">
-              <i data-lucide="trash-2" style="width:14px;height:14px"></i> Xóa tài khoản
+        <div style="padding:16px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;">
+          <button class="btn btn-secondary modal-close" data-modal="deleteModal">Hủy</button>
+          <form id="deleteUserForm" method="POST" action="">
+            <button type="submit" class="btn btn-danger" style="font-size:12px;">
+              <i data-lucide="trash-2" style="width:14px;height:14px"></i> Xóa vĩnh viễn
             </button>
           </form>
         </div>
       </div>
     </div>
+
+     
 
     <style>
       .modal-overlay { position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px; }
@@ -402,7 +453,7 @@ router.get('/', async (req, res) => {
       document.querySelectorAll('.modal-close').forEach(btn => {
         btn.addEventListener('click', () => document.getElementById(btn.dataset.modal).style.display = 'none');
       });
-      ['viewModal','deleteModal'].forEach(id => {
+      ['viewModal', 'deleteModal'].forEach(id => {
         const el = document.getElementById(id);
         el?.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
       });
@@ -412,17 +463,55 @@ router.get('/', async (req, res) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const d = btn.dataset;
-          document.getElementById('vAvatar').src               = d.avatar;
-          document.getElementById('vName').textContent         = d.name;
-          document.getElementById('vEmail').textContent        = d.email;
+          document.getElementById('vAvatar').src               = d.avatar || '/images/default-avatar.png';
+          document.getElementById('vName').textContent         = d.name || 'Người dùng';
+          document.getElementById('vEmail').textContent        = d.email || 'Chưa cập nhật email';
           document.getElementById('vUid').textContent          = d.uid;
-          document.getElementById('vPhone').textContent        = d.phone;
-          document.getElementById('vRank').innerHTML           = \`<span class="badge-rank \${(d.rank||'bronze').toLowerCase()}">\${d.rank}</span>\`;
-          document.getElementById('vPoints').textContent       = Number(d.points).toLocaleString('vi-VN') + ' điểm';
-          document.getElementById('vStatus').innerHTML        = \`<span class="badge-status \${d.status}">\${d.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>\`;
-          document.getElementById('vCreated').textContent      = d.created;
+          document.getElementById('vPhone').textContent        = d.phone || 'Chưa cung cấp';
+          document.getElementById('vRank').innerHTML           = '<span class="badge-rank ' + (d.rank||'bronze').toLowerCase().replace(' ', '-') + '">' + (d.rank || 'Đồng') + '</span>';
+          document.getElementById('vPoints').textContent       = Number(d.points || 0).toLocaleString('vi-VN') + ' điểm';
+          document.getElementById('vStatus').innerHTML        = '<span class="badge-status ' + d.status + '">' + (d.status === 'active' ? 'Hoạt động' : 'Đã khóa') + '</span>';
+          document.getElementById('vCreated').textContent      = d.created || '—';
           document.getElementById('resetPwdForm').action       = '/users/' + d.uid + '/reset-password';
-          document.getElementById('vTickets').innerHTML        = '<div style="color:var(--text-dim);font-size:12px;padding:8px 0;">—</div>';
+          
+          // Form khóa/mở khóa
+          const toggleForm = document.getElementById('toggleUserStatusForm');
+          if (toggleForm) {
+            toggleForm.action = '/users/' + d.uid + '/toggle-status';
+            const toggleText = document.getElementById('vToggleStatusText');
+            if (toggleText) toggleText.textContent = d.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản';
+          }
+
+          // Sample Activity & Check-ins
+          const sampleTickets = [
+            { title: 'Vịnh Hạ Long 360° VR Tour', date: '2026-08-01', status: 'Đã check-in', color: 'var(--green)' },
+            { title: 'Sun World Bà Nà Hills Ticket', date: '2026-07-28', status: 'Hoàn thành', color: 'var(--accent-light)' }
+          ];
+
+          document.getElementById('vTickets').innerHTML = sampleTickets.map(t =>
+            '<div style="background:var(--bg-input);padding:8px 12px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:12px;">' +
+              '<div>' +
+                '<div style="font-weight:700;color:var(--text-primary);">' + t.title + '</div>' +
+                '<div style="font-size:10px;color:var(--text-dim);">' + t.date + '</div>' +
+              '</div>' +
+              '<span style="font-size:10px;font-weight:800;color:' + t.color + ';background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:100px;">' + t.status + '</span>' +
+            '</div>'
+          ).join('');
+
+          // Copy UID Handler
+          const btnCopy = document.getElementById('btnCopyUid');
+          if (btnCopy) {
+            btnCopy.onclick = () => {
+              navigator.clipboard.writeText(d.uid);
+              btnCopy.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;color:var(--green)"></i>';
+              if (typeof lucide !== 'undefined') lucide.createIcons();
+              setTimeout(() => {
+                btnCopy.innerHTML = '<i data-lucide="copy" style="width:12px;height:12px"></i>';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+              }, 1500);
+            };
+          }
+
           document.getElementById('viewModal').style.display = 'flex';
           if (typeof lucide !== 'undefined') lucide.createIcons();
         });
@@ -430,19 +519,14 @@ router.get('/', async (req, res) => {
 
       // ── Delete user ──
       document.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const confirmed = await window.showConfirm?.({
-            title: 'Xóa tài khoản',
-            message: 'Toàn bộ dữ liệu sẽ bị xóa vĩnh viễn. Không thể hoàn tác!',
-            confirmText: 'Xóa tài khoản',
-            danger: true,
-          });
-          if (!confirmed) return;
-          document.getElementById('dName').textContent = btn.dataset.name;
-          document.getElementById('deleteForm').action = '/users/' + btn.dataset.uid + '/delete';
-          const form = document.getElementById('deleteForm');
-          form.submit();
+          const uid = btn.dataset.uid;
+          const name = decodeURIComponent(btn.dataset.name || '');
+          document.getElementById('delUserName').textContent = name || uid;
+          document.getElementById('deleteUserForm').action = '/users/' + uid + '/delete';
+          document.getElementById('deleteModal').style.display = 'flex';
+          if (typeof lucide !== 'undefined') lucide.createIcons();
         });
       });
     </script>
@@ -500,11 +584,7 @@ router.post('/:uid/reset-password', requirePermission('users.reset'), async (req
   res.redirect('/users?msg=updated');
 });
 
-// ── POST /users/:uid/delete ─────────────────────────────────
-router.post('/:uid/delete', requirePermission('users.ban'), async (req, res) => {
-  await deleteUser(req.params.uid);
-  res.redirect('/users?msg=deleted');
-});
+ 
 
 // ── POST /users/:uid/toggle-status ──────────────────────────
 router.post('/:uid/toggle-status', requirePermission('users.ban'), async (req, res) => {

@@ -4,8 +4,9 @@
   "description": "Web quản trị Admin cho App DATN_Vivu360",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node --use-system-ca server.js",
+    "dev": "node --use-system-ca --watch server.js",
+    "test": "node --use-system-ca tests/user-sync.test.js"
   },
   "dependencies": {
     "ejs": "^3.1.10",

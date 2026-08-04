@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { getMongoUsers, syncUsersToMongo, updateMongoUser, updateMongoAccess, deleteMongoUser, getAllMongoGroups, getAllMongoPosts } = require('./mongodbApi');
 
 let admin = null;
 let db = null;
@@ -91,7 +92,6 @@ if (fs.existsSync(serviceAccountPath)) {
 async function upsertUser(userData = {}) {
   let enrichedData = { ...userData };
 
-  // Nếu không có email trong payload, fetch từ Firebase Auth
   if (!enrichedData.email && enrichedData.uid && isFirebaseConnected) {
     try {
       const authUser = await auth.getUser(enrichedData.uid);
@@ -131,10 +131,8 @@ async function getConfigFromFirebase(defaultConfig) {
   try {
     const doc = await db.collection('system_config').doc('app_settings').get();
     if (doc.exists) {
-      // Trả về cấu hình merge với default để phòng trường hợp thiếu key
       return { ...defaultConfig, ...doc.data() };
     } else {
-      // Tạo mới cấu hình mặc định trên Firestore
       await db.collection('system_config').doc('app_settings').set(defaultConfig);
       return defaultConfig;
     }
@@ -144,7 +142,6 @@ async function getConfigFromFirebase(defaultConfig) {
   }
 }
 
-// Hàm ghi cấu hình lên Firestore (nếu có kết nối)
 async function saveConfigToFirebase(newConfig) {
   if (!isFirebaseConnected) return false;
   try {
@@ -176,7 +173,6 @@ async function getUsers() {
           photoURL: userRecord.photoURL || '',
           emailVerified: userRecord.emailVerified,
           disabled: userRecord.disabled,
-          createdAt: userRecord.metadata?.creationTime || new Date().toISOString(),
           lastSignInTime: userRecord.metadata?.lastSignInTime || null,
         });
       });
@@ -184,11 +180,13 @@ async function getUsers() {
     } while (nextPageToken);
 
     if (authUsers.length === 0) {
-      console.log('ℹ️ Firebase Auth không có user nào. Trả về mockUsers.');
-      return mockUsers;
+      const mongoUsers = await getMongoUsers();
+      if (mongoUsers && mongoUsers.length > 0) {
+        return mongoUsers.map(u => normalizeUserForAdmin(u));
+      }
+      return [];
     }
 
-    // Bước 2: Lấy dữ liệu mở rộng từ Firestore (points, rank, status...)
     const firestoreMap = {};
     try {
       const snapshot = await db.collection('users').get();
@@ -200,9 +198,27 @@ async function getUsers() {
     }
 
     // Bước 3: Merge Auth + Firestore
-    const users = authUsers.map(authUser => {
+    let users = authUsers.map(authUser => {
       const fsData = firestoreMap[authUser.uid] || {};
       return normalizeUserForAdmin({ ...authUser, ...fsData, uid: authUser.uid });
+    });
+
+    const mongoSync = await syncUsersToMongo(users);
+    if (!mongoSync.offline) {
+      console.log(`MongoDB user sync: ${mongoSync.synced} thành công, ${mongoSync.failed} lỗi.`);
+    }
+
+    const mongoUsers = await getMongoUsers();
+    const mongoMap = Object.fromEntries(mongoUsers.map(user => [user.firebaseUid, user]));
+    users = users.map(user => {
+      const mongoUser = mongoMap[user.uid] || {};
+      return normalizeUserForAdmin({
+        ...user,
+        phoneNumber: mongoUser.phone || user.phoneNumber,
+        photoURL: mongoUser.avatar || user.photoURL,
+        points: mongoUser.points ?? user.points,
+        rank: mongoUser.rank || user.rank,
+      });
     });
 
     console.log(`✅ Đã tải ${users.length} user từ Firebase Auth.`);
@@ -239,6 +255,8 @@ async function updateUser(uid, updatedData) {
       updatedAt: new Date().toISOString(),
     };
     await db.collection('users').doc(uid).set(updatePayload, { merge: true });
+    await updateMongoUser(uid, sanitized)
+      .catch(error => console.warn('MongoDB update user:', error.message));
     return sanitized;
   } catch (error) {
     console.error(`❌ Lỗi cập nhật user ${uid} trên Firestore:`, error.message);
@@ -253,6 +271,7 @@ async function deleteUser(uid) {
     return true;
   }
   try {
+    await deleteMongoUser(uid).catch(error => console.warn('MongoDB delete user:', error.message));
     await db.collection('users').doc(uid).delete();
     try {
       await auth.deleteUser(uid);
@@ -282,6 +301,8 @@ async function toggleUserStatus(uid) {
       const currentStatus = doc.data().status || 'active';
       const newStatus = currentStatus === 'active' ? 'locked' : 'active';
       const isDisabled = newStatus === 'locked';
+      await updateMongoAccess(uid, newStatus)
+        .catch(error => console.warn('MongoDB update status:', error.message));
       
       // Update Firestore user doc
       await docRef.set({
@@ -318,7 +339,7 @@ async function resetUserPassword(uid) {
 }
 
 // ========================
-// MOCK DATA (Demo Mode)
+// MOCK DATA & STATS
 // ========================
 
 const mockUsers = [
@@ -327,90 +348,67 @@ const mockUsers = [
   { uid: 'u003', name: 'Lê Hoàng Nam', email: 'nam.le@yahoo.com', phone: '0901122334', points: 3100, rank: 'Bạc', status: 'active', avatar: 'https://i.pravatar.cc/150?img=12', createdAt: '2026-01-15' },
   { uid: 'u004', name: 'Phạm Thùy Dung', email: 'dung.pham@outlook.com', phone: '0938765432', points: 950, rank: 'Đồng', status: 'locked', avatar: 'https://i.pravatar.cc/150?img=32', createdAt: '2026-03-20' },
   { uid: 'u005', name: 'Hoàng Văn Tùng', email: 'tung.hoang@vivu360.vn', phone: '0977889900', points: 22500, rank: 'Kim Cương', status: 'active', avatar: 'https://i.pravatar.cc/150?img=53', createdAt: '2025-09-01' },
-  { uid: 'u006', name: 'Võ Ngọc Hà', email: 'ha.vo@gmail.com', phone: '0965432100', points: 6800, rank: 'Vàng', status: 'active', avatar: 'https://i.pravatar.cc/150?img=25', createdAt: '2026-02-14' },
-  { uid: 'u007', name: 'Đặng Quốc Bảo', email: 'bao.dang@hotmail.com', phone: '0923456789', points: 1200, rank: 'Đồng', status: 'active', avatar: 'https://i.pravatar.cc/150?img=59', createdAt: '2026-05-08' },
-  { uid: 'u008', name: 'Bùi Thanh Hương', email: 'huong.bui@vivu360.vn', phone: '0891234567', points: 4500, rank: 'Bạc', status: 'active', avatar: 'https://i.pravatar.cc/150?img=41', createdAt: '2026-04-22' },
 ];
 
 const mockDestinations = [
-  { id: 'd001', title: 'Vịnh Hạ Long', region: 'Quảng Ninh', rating: 4.9, reviews: 12000, price: '2.500.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
-  { id: 'd002', title: 'Phố Cổ Hội An', region: 'Quảng Nam', rating: 4.8, reviews: 34000, price: '1.200.000đ', image: 'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
-  { id: 'd003', title: 'Đảo Phú Quốc', region: 'Kiên Giang', rating: 5.0, reviews: 8500, price: '4.800.000đ', image: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
-  { id: 'd004', title: 'Sa Pa', region: 'Lào Cai', rating: 4.7, reviews: 21000, price: '1.950.000đ', image: 'https://images.unsplash.com/photo-1504893524553-b855bce32c67?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: false },
-  { id: 'd005', title: 'Khách Sạn InterContinental', region: 'Phú Quốc', rating: 4.9, price: '3.800.000đ/đêm', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'hotel', hasTour360: false },
-  { id: 'd006', title: 'Tour Ngắm Hoàng Hôn Phú Quốc', region: 'Phú Quốc', rating: 4.8, price: '850.000đ/người', image: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'tour', hasTour360: false },
-  { id: 'd007', title: 'VinWonders & Safari', region: 'Phú Quốc', rating: 4.7, price: '1.350.000đ/vé', image: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'ticket', hasTour360: false },
-  { id: 'd008', title: 'Thuê Xe Hyundai Accent', region: 'Phú Quốc', rating: 4.6, price: '700.000đ/ngày', image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80', status: 'inactive', type: 'car', hasTour360: false },
+  { id: 'd001', title: 'Vịnh Hạ Long', region: 'Quảng Ninh', zone: 'Miền Bắc', lat: 20.9101, lng: 107.1839, rating: 4.9, reviews: 12450, checkins: 8520, price: '2.500.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd002', title: 'Sa Pa & Đỉnh Fansipan', region: 'Lào Cai', zone: 'Miền Bắc', lat: 22.3364, lng: 103.8438, rating: 4.8, reviews: 9800, checkins: 6310, price: '1.800.000đ', image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'tour', hasTour360: true },
+  { id: 'd003', title: 'Quần thể Tràng An - Bái Đính', region: 'Ninh Bình', zone: 'Miền Bắc', lat: 20.2506, lng: 105.9745, rating: 4.85, reviews: 7600, checkins: 5120, price: '650.000đ', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd004', title: 'Phố cổ Hà Nội & Hồ Hoàn Kiếm', region: 'Hà Nội', zone: 'Miền Bắc', lat: 21.0285, lng: 105.8542, rating: 4.75, reviews: 18200, checkins: 14500, price: 'Miễn phí', image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd005', title: 'Cố đô Huế & Sông Hương', region: 'Thừa Thiên Huế', zone: 'Miền Trung', lat: 16.4637, lng: 107.5909, rating: 4.7, reviews: 8900, checkins: 4890, price: '450.000đ', image: 'https://images.unsplash.com/photo-1569154941061-e231b4725ef1?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd006', title: 'Bà Nà Hills & Cầu Vàng', region: 'Đà Nẵng', zone: 'Miền Trung', lat: 15.9967, lng: 107.9868, rating: 4.92, reviews: 21500, checkins: 16800, price: '950.000đ', image: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'ticket', hasTour360: true },
+  { id: 'd007', title: 'Phố cổ Hội An', region: 'Quảng Nam', zone: 'Miền Trung', lat: 15.8801, lng: 108.3380, rating: 4.88, reviews: 16400, checkins: 12900, price: '120.000đ', image: 'https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd008', title: 'Bãi biển Nha Trang & VinWonders', region: 'Khánh Hòa', zone: 'Miền Trung', lat: 12.2388, lng: 109.1967, rating: 4.8, reviews: 13200, checkins: 9400, price: '880.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'hotel', hasTour360: true },
+  { id: 'd009', title: 'Thành phố sương mù Đà Lạt', region: 'Lâm Đồng', zone: 'Miền Trung', lat: 11.9404, lng: 108.4583, rating: 4.86, reviews: 19800, checkins: 15100, price: '1.200.000đ', image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'hotel', hasTour360: true },
+  { id: 'd010', title: 'Phong Nha - Kẻ Bàng', region: 'Quảng Bình', zone: 'Miền Trung', lat: 17.5903, lng: 106.2833, rating: 4.95, reviews: 6200, checkins: 3800, price: '1.500.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'tour', hasTour360: true },
+  { id: 'd011', title: 'Phố đi bộ Nguyễn Huệ & Chợ Bến Thành', region: 'TP. Hồ Chí Minh', zone: 'Miền Nam', lat: 10.7769, lng: 106.7009, rating: 4.7, reviews: 24500, checkins: 21000, price: 'Miễn phí', image: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
+  { id: 'd012', title: 'Chợ nổi Cái Răng', region: 'Cần Thơ', zone: 'Miền Nam', lat: 10.0062, lng: 105.7469, rating: 4.65, reviews: 5400, checkins: 3200, price: '350.000đ', image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'tour', hasTour360: true },
+  { id: 'd013', title: 'Đảo ngọc Phú Quốc', region: 'Kiên Giang', zone: 'Miền Nam', lat: 10.2899, lng: 103.9840, rating: 4.91, reviews: 28900, checkins: 22400, price: '3.200.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'hotel', hasTour360: true },
+  { id: 'd014', title: 'Mũi Né - Đồi Cát Bay', region: 'Bình Thuận', zone: 'Miền Nam', lat: 10.9333, lng: 108.2833, rating: 4.68, reviews: 7100, checkins: 4900, price: '500.000đ', image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: false },
+  { id: 'd015', title: 'Quần đảo Côn Đảo', region: 'Bà Rịa - Vũng Tàu', zone: 'Miền Nam', lat: 8.6833, lng: 106.6000, rating: 4.89, reviews: 4300, checkins: 2900, price: '2.800.000đ', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80', status: 'active', type: 'destination', hasTour360: true },
 ];
 
 const mockTickets = [
   { code: 'VV360-HL4829', userId: 'u001', userName: 'Nguyễn Minh', destination: 'Vịnh Hạ Long', region: 'Quảng Ninh', date: '2026-06-18', guests: 2, price: '2.500.000đ', status: 'confirmed', createdAt: '2026-06-10' },
-  { code: 'VV360-HA1023', userId: 'u002', userName: 'Trần Thị Lan', destination: 'Phố Cổ Hội An', region: 'Quảng Nam', date: '2026-07-05', guests: 3, price: '1.200.000đ', status: 'confirmed', createdAt: '2026-06-28' },
-  { code: 'VV360-PQ8812', userId: 'u005', userName: 'Hoàng Văn Tùng', destination: 'Đảo Phú Quốc', region: 'Kiên Giang', date: '2026-07-15', guests: 4, price: '4.800.000đ', status: 'pending', createdAt: '2026-07-01' },
-  { code: 'VV360-SP3344', userId: 'u003', userName: 'Lê Hoàng Nam', destination: 'Sa Pa', region: 'Lào Cai', date: '2026-06-20', guests: 1, price: '1.950.000đ', status: 'cancelled', createdAt: '2026-06-12' },
-  { code: 'VV360-IC5567', userId: 'u006', userName: 'Võ Ngọc Hà', destination: 'InterContinental Resort', region: 'Phú Quốc', date: '2026-08-01', guests: 2, price: '3.800.000đ', status: 'confirmed', createdAt: '2026-06-30' },
-  { code: 'VV360-TH7788', userId: 'u002', userName: 'Trần Thị Lan', destination: 'Tour Hoàng Hôn', region: 'Phú Quốc', date: '2026-07-06', guests: 3, price: '850.000đ', status: 'pending', createdAt: '2026-06-29' },
-  { code: 'VV360-VW9901', userId: 'u008', userName: 'Bùi Thanh Hương', destination: 'VinWonders & Safari', region: 'Phú Quốc', date: '2026-07-20', guests: 5, price: '1.350.000đ', status: 'confirmed', createdAt: '2026-07-01' },
+  { code: 'VV360-BN9921', userId: 'u002', userName: 'Trần Thị Lan', destination: 'Bà Nà Hills & Cầu Vàng', region: 'Đà Nẵng', date: '2026-07-02', guests: 4, price: '3.800.000đ', status: 'confirmed', createdAt: '2026-06-25' },
+  { code: 'VV360-PQ1104', userId: 'u005', userName: 'Hoàng Văn Tùng', destination: 'Đảo ngọc Phú Quốc', region: 'Kiên Giang', date: '2026-07-15', guests: 2, price: '6.400.000đ', status: 'confirmed', createdAt: '2026-07-01' },
 ];
 
-const mockPosts = [
-  { id: 'p001', userId: 'u001', userName: 'Nguyễn Minh', avatar: 'https://i.pravatar.cc/150?img=68', content: 'Hạ Long đẹp quá trời! Vịnh nhìn từ trên flycam 360 thực sự choáng ngợp 🌊🏔️', likes: 128, comments: 23, image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=600&q=80', status: 'visible', createdAt: '2026-06-28' },
-  { id: 'p002', userId: 'u002', userName: 'Trần Thị Lan', avatar: 'https://i.pravatar.cc/150?img=47', content: 'Review chi tiết Hội An 3 ngày 2 đêm cho ai cần tham khảo nhé! Phố cổ về đêm lung linh đèn lồng tuyệt vời ❤️🏮', likes: 256, comments: 45, image: 'https://images.unsplash.com/photo-1555921015-5532091f6026?auto=format&fit=crop&w=600&q=80', status: 'visible', createdAt: '2026-06-25' },
-  { id: 'p003', userId: 'u005', userName: 'Hoàng Văn Tùng', avatar: 'https://i.pravatar.cc/150?img=53', content: 'Phú Quốc mùa này nước biển xanh trong vắt, cát trắng mịn. Chill thật sự! 🏖️☀️', likes: 89, comments: 12, image: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=600&q=80', status: 'visible', createdAt: '2026-06-30' },
-  { id: 'p004', userId: 'u003', userName: 'Lê Hoàng Nam', avatar: 'https://i.pravatar.cc/150?img=12', content: 'Săn mây Sa Pa lúc 5h sáng. Lạnh cóng nhưng mà xứng đáng! View đỉnh vãi 🌤️⛰️', likes: 342, comments: 67, image: 'https://images.unsplash.com/photo-1504893524553-b855bce32c67?auto=format&fit=crop&w=600&q=80', status: 'visible', createdAt: '2026-06-22' },
-  { id: 'p005', userId: 'u004', userName: 'Phạm Thùy Dung', avatar: 'https://i.pravatar.cc/150?img=32', content: 'Bài viết spam quảng cáo không liên quan du lịch...', likes: 2, comments: 0, image: '', status: 'hidden', createdAt: '2026-06-29' },
-  { id: 'p006', userId: 'u006', userName: 'Võ Ngọc Hà', avatar: 'https://i.pravatar.cc/150?img=25', content: 'Tắm khoáng nóng Mù Cang Chải, ngắm ruộng bậc thang mùa lúa chín vàng. Đẹp như tranh 🎨🌾', likes: 178, comments: 34, image: 'https://images.unsplash.com/photo-1504893524553-b855bce32c67?auto=format&fit=crop&w=600&q=80', status: 'visible', createdAt: '2026-06-20' },
-];
+const mockPosts = [];
+const mockChatGroups = [];
 
-const mockChatGroups = [
-  { id: 'g001', name: 'Du lịch Hạ Long', members: 156, lastMessage: 'Ai đi Hạ Long tháng 7 ghép nhóm không?', lastSender: 'Nguyễn Minh', lastTime: '2026-07-01 22:30', status: 'active' },
-  { id: 'g002', name: 'Hội An Lovers 🏮', members: 234, lastMessage: 'Quán cơm gà nào ngon nhất Hội An vậy mọi người?', lastSender: 'Trần Thị Lan', lastTime: '2026-07-01 21:15', status: 'active' },
-  { id: 'g003', name: 'Phú Quốc Backpackers', members: 89, lastMessage: 'Review resort vừa ở xong nè, đẹp lắm!', lastSender: 'Hoàng Văn Tùng', lastTime: '2026-07-01 20:45', status: 'active' },
-  { id: 'g004', name: 'Sa Pa Trekking Club ⛰️', members: 67, lastMessage: 'Mùa này đi trek Fansipan được không?', lastSender: 'Lê Hoàng Nam', lastTime: '2026-06-30 18:00', status: 'active' },
-  { id: 'g005', name: 'Nhóm test (spam)', members: 3, lastMessage: 'abc', lastSender: 'user_test', lastTime: '2026-06-25 10:00', status: 'locked' },
-];
-
-// Dashboard statistics
 async function getDashboardStats() {
   const users = await getUsers();
   const totalUsers = users.length;
   
-  let totalGroups = mockChatGroups.length;
-  if (isFirebaseConnected) {
-    try {
-      const snap = await db.collection('chat_groups').get();
-      if (!snap.empty) totalGroups = snap.size;
-    } catch(e) {}
-  }
+  let totalGroups = 0;
+  try {
+    const mongoGroups = await getAllMongoGroups();
+    if (Array.isArray(mongoGroups)) totalGroups = mongoGroups.length;
+  } catch(e) {}
 
   let totalObjects = mockDestinations.length;
-  if (isFirebaseConnected) {
-    try {
-      const snap = await db.collection('destinations').get();
-      if (!snap.empty) totalObjects = snap.size;
-    } catch(e) {}
-  }
-
   const totalTickets = mockTickets.length;
   const confirmedTickets = mockTickets.filter(t => t.status === 'confirmed').length;
   const pendingTickets = mockTickets.filter(t => t.status === 'pending').length;
   const cancelledTickets = mockTickets.filter(t => t.status === 'cancelled').length;
-  const totalPosts = mockPosts.filter(p => p.status === 'visible').length;
 
-  // Helper parse price
+  let totalPosts = 0;
+  try {
+    const mongoPosts = await getAllMongoPosts();
+    if (Array.isArray(mongoPosts)) totalPosts = mongoPosts.length;
+  } catch(e) {}
+
   const parsePrice = (pStr) => {
     if (!pStr) return 0;
     const num = parseInt(pStr.replace(/[^0-9]/g, ''), 10);
     return isNaN(num) ? 0 : num;
   };
 
-  // Calculate dynamic revenue
   const confirmedTicketsArray = mockTickets.filter(t => t.status === 'confirmed');
-  const revenueVal = confirmedTicketsArray.reduce((sum, t) => {
-    return sum + parsePrice(t.price) * (t.guests || 1);
-  }, 0);
+  const revenueVal = confirmedTicketsArray.reduce((sum, t) => sum + parsePrice(t.price) * (t.guests || 1), 0);
   const totalRevenue = revenueVal.toLocaleString('vi-VN') + 'đ';
-  
+
   const rankDistribution = {
     'Đồng': users.filter(u => u.rank === 'Đồng').length,
     'Bạc': users.filter(u => u.rank === 'Bạc').length,
@@ -420,14 +418,11 @@ async function getDashboardStats() {
   };
 
   const monthlyBookings = [12, 18, 25, 22, 30, 28, 35, 42, 38, 45, 50, 48];
-  
-  // Proportional monthly revenue with the last month being the calculated revenueVal
   const monthlyRevenue = [
     6800000, 9500000, 14200000, 11800000, 18000000, 15500000, 
     22000000, 25800000, 21200000, 24500000, 29000000, revenueVal
   ];
 
-  // Group bookings by region for Top Destination Regions chart
   const regionCounts = {};
   mockTickets.forEach(t => {
     const key = t.region || 'Khác';
@@ -438,12 +433,7 @@ async function getDashboardStats() {
     .sort((a, b) => b.count - a.count);
 
   const recentActivities = [
-    { type: 'booking', message: 'Bùi Thanh Hương đặt vé VinWonders & Safari', time: '5 phút trước', icon: 'ticket' },
-    { type: 'user', message: 'Đặng Quốc Bảo đăng ký tài khoản mới', time: '15 phút trước', icon: 'user-plus' },
-    { type: 'post', message: 'Hoàng Văn Tùng đăng bài viết mới về Phú Quốc', time: '30 phút trước', icon: 'file-text' },
-    { type: 'booking', message: 'Trần Thị Lan đặt Tour Hoàng Hôn Phú Quốc', time: '1 giờ trước', icon: 'ticket' },
-    { type: 'booking', message: 'Hoàng Văn Tùng đặt vé Đảo Phú Quốc', time: '2 giờ trước', icon: 'ticket' },
-    { type: 'review', message: 'Nguyễn Minh đánh giá 5 sao cho Hạ Long', time: '3 giờ trước', icon: 'star' },
+    { type: 'user', message: 'Hệ thống Admin đang hoạt động đồng bộ MongoDB & Firebase', time: 'Vừa xong', icon: 'check-circle' }
   ];
 
   const recentUsers = users
@@ -470,6 +460,86 @@ async function getDashboardStats() {
   };
 }
 
+async function getFirestorePosts() {
+  if (!isFirebaseConnected) return [];
+  try {
+    const collections = ['posts', 'community_posts', 'feeds'];
+    for (const colName of collections) {
+      const snap = await db.collection(colName).limit(200).get();
+      if (!snap.empty) {
+        const posts = [];
+        snap.forEach(doc => {
+          const data = doc.data();
+          posts.push({
+            id: doc.id,
+            _id: doc.id,
+            ...data,
+            createdAt: safeDate(data.createdAt || data.timestamp || new Date()),
+          });
+        });
+        console.log(`🔥 Đã tải ${posts.length} bài viết thực tế từ Firestore collection '${colName}'`);
+        return posts;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Lỗi đọc Firestore posts:', e.message);
+  }
+  return [];
+}
+
+async function getFirestoreGroups() {
+  if (!isFirebaseConnected) return [];
+  try {
+    const collections = ['groups', 'chat_groups', 'rooms'];
+    for (const colName of collections) {
+      const snap = await db.collection(colName).limit(100).get();
+      if (!snap.empty) {
+        const groups = [];
+        snap.forEach(doc => {
+          const data = doc.data();
+          groups.push({
+            id: doc.id,
+            _id: doc.id,
+            ...data,
+            createdAt: safeDate(data.createdAt || data.timestamp || new Date()),
+          });
+        });
+        console.log(`🔥 Đã tải ${groups.length} nhóm chat thực tế từ Firestore collection '${colName}'`);
+        return groups;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Lỗi đọc Firestore groups:', e.message);
+  }
+  return [];
+}
+
+async function getFirestoreDestinations() {
+  if (!isFirebaseConnected) return [];
+  try {
+    const collections = ['destinations', 'tours', 'locations', 'places'];
+    for (const colName of collections) {
+      const snap = await db.collection(colName).limit(100).get();
+      if (!snap.empty) {
+        const destinations = [];
+        snap.forEach(doc => {
+          const data = doc.data();
+          destinations.push({
+            id: doc.id,
+            _id: doc.id,
+            ...data,
+          });
+        });
+        console.log(`🔥 Đã tải ${destinations.length} điểm đến thực tế từ Firestore collection '${colName}'`);
+        return destinations;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Lỗi đọc Firestore destinations:', e.message);
+  }
+  return [];
+}
+
 module.exports = {
   admin,
   db,
@@ -487,8 +557,12 @@ module.exports = {
   mockChatGroups,
   getDashboardStats,
   getUsers,
+  getFirestorePosts,
+  getFirestoreGroups,
+  getFirestoreDestinations,
   updateUser,
   deleteUser,
   toggleUserStatus,
   resetUserPassword,
 };
+// Trigger nodemon reload

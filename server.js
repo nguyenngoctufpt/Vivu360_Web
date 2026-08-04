@@ -19,10 +19,14 @@ app.use(session({
   cookie: { maxAge: 24 * 60 * 60 * 1000 },
 }));
 
-// Inject session & path into all templates
+const { postReports, getPendingReports } = require('./config/postReports');
+
+// Inject session, path & post reports into all templates
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.currentPath = req.path;
+  res.locals.pendingReports = getPendingReports();
+  res.locals.pendingReportsCount = res.locals.pendingReports.length;
   next();
 });
 
@@ -32,12 +36,17 @@ const { requireAuth, requireRole, requirePermission } = require('./middleware/rb
 // ─── Routes ──────────────────────────────────────────────
 const authRoutes          = require('./routes/auth');
 const dashboardRoutes     = require('./routes/dashboard');
+const analyticsRoutes     = require('./routes/analytics');
+const destinationsRoutes  = require('./routes/destinations');
+const ticketsRoutes       = require('./routes/tickets');
 const usersRoutes         = require('./routes/users');
 const postsRoutes         = require('./routes/posts');
+const chatRoutes          = require('./routes/chat');
 const notificationsRoutes = require('./routes/notifications');
 const bannersRoutes       = require('./routes/banners');
 const configRoutes        = require('./routes/config');
 const adminsRoutes        = require('./routes/admins');
+const apiRoutes           = require('./routes/api');
 
 // Import monitoring — hỗ trợ cả 2 dạng export (object hoặc single router)
 const monitoringModule = require('./routes/monitoring');
@@ -55,14 +64,31 @@ app.get('/', (req, res) => {
   res.redirect('/login');
 });
 
+// REST API Endpoints (/api & /api/v1)
+app.use('/api/v1', apiRoutes);
+app.use('/api',    apiRoutes);
+
 // Dashboard
 app.use('/dashboard', requireAuth, requirePermission('dashboard'), dashboardRoutes);
+
+// Analytics & Statistical Map (/analytics & /map)
+app.use('/analytics', requireAuth, requirePermission('dashboard'), analyticsRoutes);
+app.use('/map',       requireAuth, requirePermission('dashboard'), analyticsRoutes);
+
+// Destinations & Tours
+app.use('/destinations', requireAuth, requirePermission('destinations'), destinationsRoutes);
+
+// Tickets & Bookings
+app.use('/tickets', requireAuth, requirePermission('tickets.read'), ticketsRoutes);
 
 // Users
 app.use('/users', requireAuth, requirePermission('users.read'), usersRoutes);
 
 // Posts
 app.use('/posts', requireAuth, requirePermission('posts'), postsRoutes);
+
+// Chat
+app.use('/chat', requireAuth, requirePermission('chat'), chatRoutes);
 
 // Notifications
 app.use('/notifications', requireAuth, requirePermission('notifications'), notificationsRoutes);
@@ -80,8 +106,12 @@ app.use('/config', requireAuth, requirePermission('config.remote'), configRoutes
 // Admins (super_admin only)
 app.use('/admins', requireAuth, requireRole('super_admin'), adminsRoutes);
 
-// ─── 404 ─────────────────────────────────────────────────
+// ─── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
+  if (req.path.startsWith('/api') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+    return res.status(404).json({ success: false, message: "Điểm cuối không tồn tại", path: req.originalUrl });
+  }
+
   if (!req.session.user) return res.redirect('/login');
   res.status(404).render('layouts/main', {
     title: '404 — Không tìm thấy',
@@ -95,7 +125,7 @@ app.use((req, res) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n  ⚡ Admin Vivu360 đang chạy tại:`);
   console.log(`  → http://localhost:${PORT}\n`);
   console.log(`  ── Demo accounts ──────────────────────`);
@@ -108,3 +138,13 @@ app.listen(PORT, () => {
   console.log(`  🩷 Marketing    : mkt@vivu360.vn      / mkt123`);
   console.log(`  ⚫ Analyst      : analyst@vivu360.vn  / analyst123\n`);
 });
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`\n⚠️  Cổng ${PORT} đang được sử dụng bởi tiến trình khác.`);
+    console.log(`👉 Web Admin vẫn đang chạy tại: http://localhost:${PORT}\n`);
+  } else {
+    console.error('❌ Lỗi server:', err);
+  }
+});
+

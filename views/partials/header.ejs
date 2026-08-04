@@ -26,54 +26,54 @@
     <div style="position:relative;display:inline-block;">
       <button class="header-btn" id="notifBellBtn" data-tooltip="Thông báo">
         <i data-lucide="bell" style="width:15px;height:15px;"></i>
-        <span class="notif-dot" id="notifDot"></span>
+        <% if (typeof pendingReportsCount !== 'undefined' && pendingReportsCount > 0) { %>
+          <span class="notif-dot" id="notifDot" style="background:var(--red);width:8px;height:8px;border-radius:50%;position:absolute;top:4px;right:4px;"></span>
+        <% } %>
       </button>
 
       <!-- Dropdown -->
       <div id="notifDropdown" style="
         display:none; position:absolute; right:0; top:calc(100% + 10px);
-        width:330px; background:var(--bg-card); border:1px solid var(--border-hover);
+        width:340px; background:var(--bg-card); border:1px solid var(--border-hover);
         border-radius:var(--radius); box-shadow:var(--shadow-lg); z-index:1000; overflow:hidden;
       ">
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:13px;font-weight:700;color:var(--text-primary);">Thông báo</span>
-          <span style="font-size:10px;font-weight:700;padding:2px 8px;background:var(--accent-glow);color:var(--accent-light);border-radius:100px;border:1px solid rgba(99,102,241,0.2);">Mới nhất</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text-primary);">Thông báo kiểm duyệt</span>
+          <% if (typeof pendingReportsCount !== 'undefined' && pendingReportsCount > 0) { %>
+            <span style="font-size:10px;font-weight:800;padding:2px 8px;background:var(--red-bg);color:var(--red);border-radius:100px;border:1px solid rgba(239,68,68,0.2);"><%= pendingReportsCount %> báo cáo vi phạm</span>
+          <% } else { %>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;background:var(--accent-glow);color:var(--accent-light);border-radius:100px;">Bình thường</span>
+          <% } %>
         </div>
-        <div style="max-height:300px;overflow-y:auto;">
+        <div style="max-height:320px;overflow-y:auto;">
+          <% if (typeof pendingReports !== 'undefined' && pendingReports.length > 0) { %>
+            <% pendingReports.forEach(function(rep) { %>
+              <a href="/posts?q=<%= encodeURIComponent(rep.postId) %>" style="display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border);text-decoration:none;transition:var(--transition);" class="notif-item-row">
+                <div style="width:32px;height:32px;border-radius:50%;background:var(--red-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--red);">
+                  <i data-lucide="shield-alert" style="width:14px;height:14px;"></i>
+                </div>
+                <div style="flex:1;font-size:12px;">
+                  <div style="color:var(--text-primary);font-weight:700;">🚨 Bài viết bị báo cáo vi phạm!</div>
+                  <div style="color:var(--text-secondary);font-size:11px;margin-top:2px;">Bởi <strong><%= rep.reporterName %></strong> — Lý do: <%= rep.reason %></div>
+                  <div style="color:var(--text-dim);font-size:9px;margin-top:4px;">Tác giả: <%= rep.authorName %></div>
+                </div>
+              </a>
+            <% }); %>
+          <% } %>
           <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:var(--transition);" class="notif-item-row">
             <div style="width:32px;height:32px;border-radius:50%;background:var(--green-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--green);">
               <i data-lucide="database" style="width:13px;height:13px;"></i>
             </div>
             <div style="flex:1;font-size:12px;">
-              <div style="color:var(--text-primary);font-weight:600;">Firebase đã kết nối thành công</div>
-              <div style="color:var(--text-muted);font-size:11px;margin-top:2px;">Dữ liệu người dùng đang đồng bộ realtime</div>
+              <div style="color:var(--text-primary);font-weight:600;">Hệ thống Vivu360 đang hoạt động</div>
+              <div style="color:var(--text-muted);font-size:11px;margin-top:2px;">Dữ liệu bài viết & báo cáo đồng bộ MongoDB</div>
               <div style="color:var(--text-dim);font-size:10px;margin-top:4px;">Vừa xong</div>
             </div>
           </div>
-          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:var(--transition);" class="notif-item-row">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-glow);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent-light);">
-              <i data-lucide="users" style="width:13px;height:13px;"></i>
-            </div>
-            <div style="flex:1;font-size:12px;">
-              <div style="color:var(--text-primary);font-weight:600;">Người dùng mới đăng ký</div>
-              <div style="color:var(--text-muted);font-size:11px;margin-top:2px;">Kiểm tra danh sách người dùng</div>
-              <div style="color:var(--text-dim);font-size:10px;margin-top:4px;">Hôm nay</div>
-            </div>
-          </div>
-          <div style="padding:12px 16px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:var(--transition);" class="notif-item-row">
-            <div style="width:32px;height:32px;border-radius:50%;background:var(--purple-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--purple);">
-              <i data-lucide="file-text" style="width:13px;height:13px;"></i>
-            </div>
-            <div style="flex:1;font-size:12px;">
-              <div style="color:var(--text-primary);font-weight:600;">Bài viết mới cần duyệt</div>
-              <div style="color:var(--text-muted);font-size:11px;margin-top:2px;">Có bài viết mới từ cộng đồng</div>
-              <div style="color:var(--text-dim);font-size:10px;margin-top:4px;">1 giờ trước</div>
-            </div>
-          </div>
         </div>
-        <a href="/notifications" style="display:block;padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--accent-light);border-top:1px solid var(--border);transition:var(--transition);"
+        <a href="/posts" style="display:block;padding:11px;text-align:center;font-size:11px;font-weight:700;color:var(--accent-light);border-top:1px solid var(--border);text-decoration:none;"
            onmouseover="this.style.background='rgba(99,102,241,0.06)'" onmouseout="this.style.background='transparent'">
-          Xem tất cả thông báo →
+          Vào trang Quản lý Bài viết →
         </a>
       </div>
     </div>

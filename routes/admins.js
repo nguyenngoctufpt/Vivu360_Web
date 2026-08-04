@@ -176,9 +176,12 @@ router.get('/', (req, res) => {
 
     <div class="page-title-row">
       <div class="page-title">
-        <h1>Quản lý Admin</h1>
-        <p>Quản lý tài khoản và phân quyền cho đội ngũ vận hành</p>
+        <h1>Quản lý Admin & Phân quyền</h1>
+        <p>Quản lý tài khoản Admin, vai trò vận hành và phân quyền bảo mật hệ thống Vivu360</p>
       </div>
+      <button onclick="document.getElementById('createAdminModal').style.display='flex'" class="btn btn-primary" style="font-weight:700;">
+        <i data-lucide="user-plus" style="width:14px;height:14px"></i> Tạo Admin mới
+      </button>
     </div>
 
     <!-- Stats row -->
@@ -186,7 +189,7 @@ router.get('/', (req, res) => {
       <div class="stat-card blue" style="margin:0;"><div class="stat-card-value">${adminAccounts.length}</div><div class="stat-card-label">Tổng Admin</div></div>
       <div class="stat-card green" style="margin:0;"><div class="stat-card-value">${adminAccounts.filter(a=>a.status==='active').length}</div><div class="stat-card-label">Đang hoạt động</div></div>
       <div class="stat-card yellow" style="margin:0;"><div class="stat-card-value">${adminAccounts.filter(a=>a.status==='inactive').length}</div><div class="stat-card-label">Tạm dừng</div></div>
-      <div class="stat-card purple" style="margin:0;"><div class="stat-card-value">${Object.keys(ROLES).length}</div><div class="stat-card-label">Roles</div></div>
+      <div class="stat-card purple" style="margin:0;"><div class="stat-card-value">${Object.keys(ROLES).length}</div><div class="stat-card-label">Vai trò RBAC</div></div>
     </div>
 
     ${groupHtml}
@@ -202,11 +205,46 @@ router.get('/', (req, res) => {
       }
     </script>
 
+    <!-- Create Admin Modal -->
+    <div id="createAdminModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);align-items:center;justify-content:center;">
+      <div class="modal-box" style="max-width:480px;">
+        <div class="modal-header">
+          <div style="font-size:15px;font-weight:800;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
+            <i data-lucide="user-plus" style="width:16px;height:16px;color:var(--accent-light);"></i>
+            Tạo tài khoản Admin mới
+          </div>
+          <button onclick="document.getElementById('createAdminModal').style.display='none'" class="btn btn-icon"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+        </div>
+        <form method="POST" action="/admins/create" style="padding:24px;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:10px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Họ và tên</label>
+            <input name="name" required placeholder="Nguyễn Văn A" style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Email công việc</label>
+            <input name="email" type="email" required placeholder="admin@vivu360.vn" style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px">Chọn Vai trò (Role)</label>
+            <select name="role" required style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:13px;outline:none;">
+              ${Object.entries(ROLES).filter(([k])=>k!=='super_admin').map(([k,r])=>`
+                <option value="${k}">${r.group} — ${r.label}</option>
+              `).join('')}
+            </select>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+            <button type="button" onclick="document.getElementById('createAdminModal').style.display='none'" class="btn btn-secondary btn-sm">Hủy</button>
+            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="check" style="width:13px;height:13px"></i> Tạo tài khoản</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Change Role Modal -->
     <div id="changeRoleModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);align-items:center;justify-content:center;">
       <div class="modal-box" style="max-width:440px;">
         <div class="modal-header">
-          <div style="font-size:15px;font-weight:800;color:var(--text-primary)">Đổi Role</div>
+          <div style="font-size:15px;font-weight:800;color:var(--text-primary)">Đổi Role Admin</div>
           <button onclick="document.getElementById('changeRoleModal').style.display='none'" class="btn btn-icon"><i data-lucide="x" style="width:14px;height:14px"></i></button>
         </div>
         <form id="changeRoleForm" method="POST" style="padding:24px;display:flex;flex-direction:column;gap:14px;">
@@ -230,6 +268,22 @@ router.get('/', (req, res) => {
   `;
 
   res.render('layouts/main', { title: 'Quản lý Admin', body });
+});
+
+router.post('/create', (req, res) => {
+  const { name, email, role } = req.body;
+  if (email && name && role) {
+    adminAccounts.push({
+      id: 'a' + (adminAccounts.length + 1) + '_' + Date.now().toString(36),
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
+      role: role,
+      status: 'active',
+      createdAt: new Date().toISOString().slice(0, 10),
+      lastLogin: 'Chưa đăng nhập',
+    });
+  }
+  res.redirect('/admins?msg=saved');
 });
 
 router.post('/:id/toggle', (req, res) => {
