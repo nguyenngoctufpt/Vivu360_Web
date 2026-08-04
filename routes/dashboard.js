@@ -187,7 +187,7 @@ router.get('/', async (req, res) => {
             <i data-lucide="bar-chart-3" style="width:16px;height:16px;color:var(--accent-light);"></i>
             Biểu đồ Cột Thống kê Dữ liệu Thực tế Hệ thống Vivu360
           </div>
-          <div class="chart-card-subtitle">Biểu diễn số lượng Người dùng, Bài viết, Nhóm chat, Điểm VR 360°, Lượt thích & Bình luận</div>
+          <div class="chart-card-subtitle">Biểu diễn toàn bộ 10 chỉ số hệ thống: Người dùng, Bài viết, Nhóm chat, Điểm VR 360°, Vé đặt chỗ, Lượt thích, Bình luận, Bài đăng ảnh, Gắn vị trí & Báo cáo vi phạm</div>
         </div>
         
         <div style="display:flex;align-items:center;gap:6px;">
@@ -199,7 +199,7 @@ router.get('/', async (req, res) => {
           </button>
         </div>
       </div>
-      <div style="position:relative;height:260px;">
+      <div style="position:relative;height:280px;">
         <canvas id="overviewBarChart"></canvas>
       </div>
     </div>
@@ -470,25 +470,33 @@ router.get('/', async (req, res) => {
           safeCreateChart(barEl, {
             type: 'bar',
             data: {
-              labels: ['Người dùng', 'Bài viết', 'Nhóm chat', 'Điểm VR 360', 'Lượt thích', 'Bình luận'],
+              labels: ['Người dùng', 'Bài viết', 'Nhóm chat', 'Điểm VR 360', 'Vé đặt chỗ', 'Lượt thích', 'Bình luận', 'Bài có ảnh', 'Gắn vị trí', 'Vi phạm'],
               datasets: [{
                 label: 'Số lượng thực tế',
-                data: [${allUsersCount}, ${allPostsCount}, ${allGroupsCount}, ${stats.totalObjects}, ${totalLikes}, ${totalComments}],
+                data: [${allUsersCount}, ${allPostsCount}, ${allGroupsCount}, ${stats.totalObjects}, ${stats.totalTickets}, ${totalLikes}, ${totalComments}, ${postsWithImages}, ${postsWithLocation}, ${pendingReportsCount}],
                 backgroundColor: [
-                  'rgba(99, 102, 241, 0.75)',
-                  'rgba(16, 185, 129, 0.75)',
-                  'rgba(168, 85, 247, 0.75)',
-                  'rgba(34, 211, 238, 0.75)',
-                  'rgba(239, 68, 68, 0.75)',
-                  'rgba(245, 158, 11, 0.75)'
+                  'rgba(99, 102, 241, 0.8)',
+                  'rgba(16, 185, 129, 0.8)',
+                  'rgba(168, 85, 247, 0.8)',
+                  'rgba(34, 211, 238, 0.8)',
+                  'rgba(251, 191, 36, 0.8)',
+                  'rgba(239, 68, 68, 0.8)',
+                  'rgba(245, 158, 11, 0.8)',
+                  'rgba(52, 211, 153, 0.8)',
+                  'rgba(129, 140, 248, 0.8)',
+                  'rgba(244, 63, 94, 0.8)'
                 ],
                 borderColor: [
                   '#818cf8',
                   '#10b981',
                   '#a855f7',
                   '#22d3ee',
+                  '#fbbf24',
                   '#ef4444',
-                  '#f59e0b'
+                  '#f59e0b',
+                  '#34d399',
+                  '#818cf8',
+                  '#f43f5e'
                 ],
                 borderWidth: 2,
                 borderRadius: 8,
@@ -509,7 +517,7 @@ router.get('/', async (req, res) => {
               scales: {
                 x: {
                   grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                  ticks: { color: '#94a3b8', font: { size: 11, weight: '700' } }
+                  ticks: { color: '#94a3b8', font: { size: 10, weight: '700' } }
                 },
                 y: {
                   grid: { color: 'rgba(255, 255, 255, 0.04)' },
@@ -597,14 +605,18 @@ router.get('/', async (req, res) => {
               ["Bai viet cong dong", "${allPostsCount}"],
               ["Nhom chat", "${allGroupsCount}"],
               ["Diem VR 360", "${stats.totalObjects}"],
+              ["Ve dat cho", "${stats.totalTickets}"],
               ["Luot thich", "${totalLikes}"],
-              ["Luot binh luan", "${totalComments}"]
+              ["Luot binh luan", "${totalComments}"],
+              ["Bai dang co anh", "${postsWithImages}"],
+              ["Bai dang gan vi tri", "${postsWithLocation}"],
+              ["Bao cao vi pham", "${pendingReportsCount}"]
             ];
-            const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement('a');
             link.setAttribute('href', encodedUri);
-            link.setAttribute('download', 'Vivu360_System_Metrics_Report.csv');
+            link.setAttribute('download', 'Vivu360_System_Overview_Full_Report.csv');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
