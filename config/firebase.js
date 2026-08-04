@@ -380,46 +380,67 @@ const mockChatGroups = [];
 async function getDashboardStats() {
   const users = await getUsers();
   const totalUsers = users.length;
-  
+
+  // --- Posts: Firestore → MongoDB API → fallback 0
+  let totalPosts = 0;
+  let allPostsList = [];
+  try {
+    if (isFirebaseConnected) {
+      const fsP = await getFirestorePosts();
+      if (fsP.length > 0) { allPostsList = fsP; }
+    }
+  } catch(e) {}
+  if (allPostsList.length === 0) {
+    try {
+      const mp = await getAllMongoPosts();
+      if (Array.isArray(mp)) allPostsList = mp;
+    } catch(e) {}
+  }
+  totalPosts = allPostsList.length;
+
+  // --- Groups: Firestore → MongoDB API → fallback 0
   let totalGroups = 0;
   try {
-    const mongoGroups = await getAllMongoGroups();
-    if (Array.isArray(mongoGroups)) totalGroups = mongoGroups.length;
+    if (isFirebaseConnected) {
+      const fsG = await getFirestoreGroups();
+      if (fsG.length > 0) { totalGroups = fsG.length; }
+    }
   } catch(e) {}
+  if (totalGroups === 0) {
+    try {
+      const mg = await getAllMongoGroups();
+      if (Array.isArray(mg)) totalGroups = mg.length;
+    } catch(e) {}
+  }
 
-  let totalObjects = mockDestinations.length;
+  // --- Destinations: Firestore → mock
+  let destinationsList = [];
+  try {
+    if (isFirebaseConnected) {
+      const fsD = await getFirestoreDestinations();
+      if (fsD.length > 0) destinationsList = fsD;
+    }
+  } catch(e) {}
+  if (destinationsList.length === 0) destinationsList = mockDestinations;
+  const totalObjects = destinationsList.length;
+
   const totalTickets = mockTickets.length;
   const confirmedTickets = mockTickets.filter(t => t.status === 'confirmed').length;
-  const pendingTickets = mockTickets.filter(t => t.status === 'pending').length;
+  const pendingTickets   = mockTickets.filter(t => t.status === 'pending').length;
   const cancelledTickets = mockTickets.filter(t => t.status === 'cancelled').length;
-
-  let totalPosts = 0;
-  try {
-    const mongoPosts = await getAllMongoPosts();
-    if (Array.isArray(mongoPosts)) totalPosts = mongoPosts.length;
-  } catch(e) {}
 
   const parsePrice = (pStr) => {
     if (!pStr) return 0;
     const num = parseInt(pStr.replace(/[^0-9]/g, ''), 10);
     return isNaN(num) ? 0 : num;
   };
-
   const confirmedTicketsArray = mockTickets.filter(t => t.status === 'confirmed');
   const revenueVal = confirmedTicketsArray.reduce((sum, t) => sum + parsePrice(t.price) * (t.guests || 1), 0);
   const totalRevenue = revenueVal.toLocaleString('vi-VN') + 'đ';
 
-  const rankDistribution = {
-    'Đồng': users.filter(u => u.rank === 'Đồng').length,
-    'Bạc': users.filter(u => u.rank === 'Bạc').length,
-    'Vàng': users.filter(u => u.rank === 'Vàng').length,
-    'Bạch Kim': users.filter(u => u.rank === 'Bạch Kim').length,
-    'Kim Cương': users.filter(u => u.rank === 'Kim Cương').length,
-  };
-
   const monthlyBookings = [12, 18, 25, 22, 30, 28, 35, 42, 38, 45, 50, 48];
   const monthlyRevenue = [
-    6800000, 9500000, 14200000, 11800000, 18000000, 15500000, 
+    6800000, 9500000, 14200000, 11800000, 18000000, 15500000,
     22000000, 25800000, 21200000, 24500000, 29000000, revenueVal
   ];
 
@@ -451,7 +472,6 @@ async function getDashboardStats() {
     cancelledTickets,
     totalPosts,
     totalRevenue,
-    rankDistribution,
     monthlyBookings,
     monthlyRevenue,
     topRegions,
