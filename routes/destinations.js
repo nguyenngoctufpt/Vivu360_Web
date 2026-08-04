@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { requirePermission } = require('../middleware/rbac');
 const { mockDestinations, getFirestoreDestinations } = require('../config/firebase');
 const { getAllMongoDestinations } = require('../config/mongodbApi');
 
