@@ -417,6 +417,19 @@ async function deleteMongoPost(postId, authorId) {
   });
 }
 
+async function getAllMongoDestinations() {
+  const endpoints = ['/destinations?limit=100', '/tours?limit=100', '/locations?limit=100', '/places?limit=100'];
+  for (const endpoint of endpoints) {
+    const res = await request(endpoint);
+    const list = extractList(res);
+    if (list && list.length > 0) {
+      console.log(`🟢 Đã lấy thành công ${list.length} điểm đến thực tế từ MongoDB API (${endpoint})!`);
+      return list;
+    }
+  }
+  return [];
+}
+
 function getActiveApiUrl() {
   return activeApiUrl;
 }
@@ -444,4 +457,5 @@ module.exports = {
   getPostsByUser,
   getAllMongoPosts,
   deleteMongoPost,
+  getAllMongoDestinations,
 };

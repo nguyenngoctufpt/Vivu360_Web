@@ -1,42 +1,50 @@
 const express = require('express');
 const router = express.Router();
-const { getDashboardStats, mockDestinations, getUsers } = require('../config/firebase');
-const { getAllMongoPosts, getAllMongoGroups, getMongoUsers } = require('../config/mongodbApi');
+const { getDashboardStats, mockDestinations, getUsers, getFirestoreDestinations } = require('../config/firebase');
+const { getAllMongoPosts, getAllMongoGroups, getMongoUsers, getAllMongoDestinations } = require('../config/mongodbApi');
 
 router.get('/', async (req, res) => {
   const stats = await getDashboardStats();
   
   let mongoPosts = [];
   let mongoUsers = [];
+  let fetchedDestinations = [];
+
   try { mongoPosts = await getAllMongoPosts(); } catch(e) {}
   try { mongoUsers = await getMongoUsers(); } catch(e) {}
+  try { fetchedDestinations = await getAllMongoDestinations(); } catch(e) {}
+  if (!fetchedDestinations || fetchedDestinations.length === 0) {
+    try { fetchedDestinations = await getFirestoreDestinations(); } catch(e) {}
+  }
+
+  const activeDestinations = (fetchedDestinations && fetchedDestinations.length > 0) ? fetchedDestinations : mockDestinations;
   
   const firebaseUsers = await getUsers();
   const allUsersCount = Math.max(mongoUsers.length, firebaseUsers.length, stats.totalUsers || 0, 15);
   const allPostsCount = Math.max(mongoPosts.length, stats.totalPosts || 0, 48);
   
   // Statistical calculations
-  const totalCheckins = mockDestinations.reduce((acc, d) => acc + (d.checkins || 0), 0);
-  const tour360Count = mockDestinations.filter(d => d.hasTour360).length;
+  const totalCheckins = activeDestinations.reduce((acc, d) => acc + (d.checkins || 0), 0);
+  const tour360Count = activeDestinations.filter(d => d.hasTour360 || d.tour360 || d.panorama).length;
   
   const zoneStats = {
-    'Miền Bắc': mockDestinations.filter(d => d.zone === 'Miền Bắc'),
-    'Miền Trung': mockDestinations.filter(d => d.zone === 'Miền Trung'),
-    'Miền Nam': mockDestinations.filter(d => d.zone === 'Miền Nam'),
+    'Miền Bắc': activeDestinations.filter(d => d.zone === 'Miền Bắc'),
+    'Miền Trung': activeDestinations.filter(d => d.zone === 'Miền Trung'),
+    'Miền Nam': activeDestinations.filter(d => d.zone === 'Miền Nam'),
   };
 
-  const provinceData = mockDestinations.map(d => ({
-    name: d.region,
-    title: d.title,
+  const provinceData = activeDestinations.map(d => ({
+    name: d.region || d.province || 'Điểm du lịch',
+    title: d.title || d.name,
     checkins: d.checkins || 1000,
     rating: d.rating || 4.8,
   })).sort((a, b) => b.checkins - a.checkins);
 
   const typeDistribution = {
-    'Điểm đến': mockDestinations.filter(d => d.type === 'destination').length,
-    'Khách sạn': mockDestinations.filter(d => d.type === 'hotel').length,
-    'Tour du lịch': mockDestinations.filter(d => d.type === 'tour').length,
-    'Vé tham quan': mockDestinations.filter(d => d.type === 'ticket').length,
+    'Điểm đến': activeDestinations.filter(d => d.type === 'destination' || !d.type).length,
+    'Khách sạn': activeDestinations.filter(d => d.type === 'hotel').length,
+    'Tour du lịch': activeDestinations.filter(d => d.type === 'tour').length,
+    'Vé tham quan': activeDestinations.filter(d => d.type === 'ticket').length,
   };
 
   const body = `
@@ -287,7 +295,7 @@ router.get('/', async (req, res) => {
     <!-- Leaflet & Chart Logic Script -->
     <script>
       (function initMapAndAnalytics() {
-        const rawDestinations = ${JSON.stringify(mockDestinations)};
+        const rawDestinations = ${JSON.stringify(activeDestinations)};
         const provinceData = ${JSON.stringify(provinceData)};
         const typeData = ${JSON.stringify(Object.values(typeDistribution))};
         let map = null;
