@@ -594,16 +594,15 @@ async function getFirestoreTickets() {
 }
 
 async function getTickets() {
+  try {
+    const { getMongoTickets } = require('./mongodbApi');
+    const apiTickets = await getMongoTickets();
+    if (apiTickets && apiTickets.length > 0) return apiTickets;
+  } catch(e) {}
   if (isFirebaseConnected) {
     const fsTickets = await getFirestoreTickets();
     if (fsTickets.length > 0) return fsTickets;
   }
-  try {
-    const { request, extractList } = require('./mongodbApi');
-    const apiRes = await request('/tickets');
-    const apiTickets = extractList(apiRes);
-    if (apiTickets && apiTickets.length > 0) return apiTickets;
-  } catch(e) {}
   return mockTickets;
 }
 

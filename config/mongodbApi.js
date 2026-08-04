@@ -15,21 +15,24 @@ const CANDIDATE_URLS = [
 async function discoverActiveApiUrl() {
   if (!isBackendOffline && hasLoggedSuccess) return activeApiUrl;
 
+  const testPaths = ['/health', '/ping', '/users', '/posts'];
   for (const candidate of CANDIDATE_URLS) {
     try {
       const cleanCandidate = candidate.replace(/\/$/, '');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600);
-      const res = await fetch(`${cleanCandidate}/health`, { signal: controller.signal }).catch(() => null);
-      clearTimeout(timeoutId);
-      if (res && res.ok) {
-        activeApiUrl = cleanCandidate;
-        isBackendOffline = false;
-        if (!hasLoggedSuccess) {
-          console.log(`🟢 Đã tự động kết nối Backend MongoDB API tại: ${activeApiUrl}`);
-          hasLoggedSuccess = true;
+      for (const p of testPaths) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch(`${cleanCandidate}${p}`, { signal: controller.signal }).catch(() => null);
+        clearTimeout(timeoutId);
+        if (res && (res.ok || res.status === 401 || res.status === 403 || res.status === 404)) {
+          activeApiUrl = cleanCandidate;
+          isBackendOffline = false;
+          if (!hasLoggedSuccess) {
+            console.log(`🟢 Đã kết nối thành công Backend MongoDB REST API tại: ${activeApiUrl}`);
+            hasLoggedSuccess = true;
+          }
+          return activeApiUrl;
         }
-        return activeApiUrl;
       }
     } catch (e) {}
   }
@@ -45,22 +48,20 @@ function extractList(response) {
   if (Array.isArray(response.posts)) return response.posts;
   if (Array.isArray(response.groups)) return response.groups;
   if (Array.isArray(response.destinations)) return response.destinations;
+  if (Array.isArray(response.tickets)) return response.tickets;
+  if (Array.isArray(response.bookings)) return response.bookings;
   if (Array.isArray(response.items)) return response.items;
   if (response.data && Array.isArray(response.data.items)) return response.data.items;
   if (response.data && Array.isArray(response.data.users)) return response.data.users;
   if (response.data && Array.isArray(response.data.posts)) return response.data.posts;
+  if (response.data && Array.isArray(response.data.destinations)) return response.data.destinations;
   return [];
 }
 
 async function request(path, options = {}) {
-  // If backend was marked offline within 15s, return null to keep UI responsive
-  if (isBackendOffline && (Date.now() - lastOfflineCheck < 15000)) {
-    return null;
-  }
-
   const currentApiUrl = await discoverActiveApiUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1800);
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
     const fullUrl = path.startsWith('http') ? path : `${currentApiUrl}${path}`;
     const response = await fetch(fullUrl, {
@@ -85,7 +86,7 @@ async function request(path, options = {}) {
       isBackendOffline = true;
       hasLoggedSuccess = false;
       lastOfflineCheck = Date.now();
-      console.log(`ℹ️ Backend API (${activeApiUrl}) chưa phản hồi. Web Admin đang nạp dữ liệu từ Firebase / Demo.`);
+      console.log(`ℹ️ Backend API (${activeApiUrl}) chưa phản hồi. Web Admin tự động sử dụng Firebase/Fallback.`);
     }
     return null;
   }
@@ -443,6 +444,19 @@ async function getAllMongoDestinations() {
   return [];
 }
 
+async function getMongoTickets() {
+  const endpoints = ['/tickets?limit=100', '/bookings?limit=100', '/orders?limit=100'];
+  for (const endpoint of endpoints) {
+    const res = await request(endpoint);
+    const list = extractList(res);
+    if (list && list.length > 0) {
+      console.log(`🟢 Đã lấy thành công ${list.length} vé từ MongoDB API (${endpoint})!`);
+      return list;
+    }
+  }
+  return [];
+}
+
 function getActiveApiUrl() {
   return activeApiUrl;
 }
@@ -471,4 +485,5 @@ module.exports = {
   getAllMongoPosts,
   deleteMongoPost,
   getAllMongoDestinations,
+  getMongoTickets,
 };
