@@ -4,33 +4,27 @@ const ExcelJS = require('exceljs');
 const { requirePermission } = require('../middleware/rbac');
 const {
   getUsers,
-  toggleUserStatus,
   resetUserPassword,
 } = require('../config/firebase');
 
-function getRankClass(rank) {
-  const map = { 'Đồng': 'bronze', 'Bạc': 'silver', 'Vàng': 'gold', 'Bạch Kim': 'platinum', 'Kim Cương': 'diamond' };
-  return map[rank] || 'bronze';
-}
 
 // ── GET /users ──────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  const { q = '', status = '', rank = '', msg = '' } = req.query;
+  const { q = '', status = '', msg = '' } = req.query;
 
   const users = await getUsers();
 
   const filtered = users.filter(u => {
     const matchQ = !q || (u.name && u.name.toLowerCase().includes(q.toLowerCase()));
     const matchStatus = !status || u.status === status;
-    const matchRank   = !rank   || u.rank === rank;
-    return matchQ && matchStatus && matchRank;
+    return matchQ && matchStatus;
   });
 
-  const activeFilters = [q, status, rank].filter(Boolean).length;
+  const activeFilters = [q, status].filter(Boolean).length;
 
   const rows = filtered.map(u => `
     <tr id="row-${u.uid}" data-user-name="${encodeURIComponent(u.name || '')}"
-      data-user-status="${u.status || ''}" data-user-rank="${encodeURIComponent(u.rank || '')}">
+      data-user-status="${u.status || ''}">
       <td style="font-family:monospace;font-size:11px;color:var(--text-dim)">${u.uid}</td>
       <td>
         <div class="user-cell">
@@ -42,7 +36,6 @@ router.get('/', async (req, res) => {
         </div>
       </td>
       <td>${u.phone}</td>
-      <td><span class="badge-rank ${getRankClass(u.rank)}">${u.rank}</span></td>
       <td style="font-weight:700;color:var(--accent-light)">${u.points.toLocaleString()}</td>
       <td>
         <span class="badge-status ${u.status}" id="status-${u.uid}">
@@ -60,18 +53,12 @@ router.get('/', async (req, res) => {
             data-status="${u.status}" data-created="${u.createdAt}" data-avatar="${u.avatar}">
             <i data-lucide="eye" style="width:14px;height:14px"></i>
           </button>
-          <button class="btn btn-icon" data-action="toggle-status"
-            data-id="${u.uid}" data-current-status="${u.status}"
-            data-tooltip="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}">
-            <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}" style="width:14px;height:14px"></i>
-          </button>
         </div>
       </td>
     </tr>`).join('');
 
   const totalActive  = users.filter(u => u.status === 'active').length;
   const totalLocked  = users.filter(u => u.status !== 'active').length;
-  const rankCounts   = users.reduce((acc, u) => { acc[u.rank] = (acc[u.rank]||0)+1; return acc; }, {});
 
   const body = `
      
@@ -125,16 +112,6 @@ router.get('/', async (req, res) => {
           <div style="font-size:10px;color:var(--text-muted);font-weight:600;">Đã khóa</div>
         </div>
       </div>
-      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;display:flex;align-items:center;gap:12px;transition:var(--transition);"
-           onmouseover="this.style.borderColor='var(--border-hover)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="width:36px;height:36px;border-radius:10px;background:var(--yellow-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i data-lucide="award" style="width:16px;height:16px;color:var(--yellow);"></i>
-        </div>
-        <div>
-          <div style="font-size:20px;font-weight:900;color:var(--text-primary);letter-spacing:-0.5px;">${rankCounts['Kim Cương']||0}</div>
-          <div style="font-size:10px;color:var(--text-muted);font-weight:600;">Kim Cương</div>
-        </div>
-      </div>
     </div>
 
     <!-- Filter -->
@@ -162,13 +139,7 @@ router.get('/', async (req, res) => {
             <option value="locked"  ${status==='locked'?'selected':''}>⊘ Đã khóa</option>
           </select>
         </div>
-        <div>
-          <label style="font-size:10px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Hạng</label>
-          <select id="userRankFilter" name="rank" style="padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:Inter,sans-serif;outline:none;">
-            <option value="" ${!rank?'selected':''}>Tất cả</option>
-            ${['Đồng','Bạc','Vàng','Bạch Kim','Kim Cương'].map(r => `<option value="${r}" ${rank===r?'selected':''}>${r}</option>`).join('')}
-          </select>
-        </div>
+
         <button type="submit" class="btn btn-primary">
           <i data-lucide="filter" style="width:13px;height:13px"></i> Lọc
         </button>
@@ -184,14 +155,13 @@ router.get('/', async (req, res) => {
               <th style="width:80px;">UID</th>
               <th>Người dùng</th>
               <th>Điện thoại</th>
-              <th>Hạng</th>
               <th>Điểm</th>
               <th>Trạng thái</th>
               <th>Ngày tạo</th>
               <th style="text-align:right;">Thao tác</th>
             </tr>
           </thead>
-          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-dim)"><i data-lucide="search" style="width:20px;height:20px;display:block;margin:0 auto 8px;"></i>Không tìm thấy kết quả nào</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-dim)"><i data-lucide="search" style="width:20px;height:20px;display:block;margin:0 auto 8px;"></i>Không tìm thấy kết quả nào</td></tr>'}</tbody>
         </table>
       </div>
       <!-- Pagination -->
@@ -222,11 +192,7 @@ router.get('/', async (req, res) => {
         <!-- Body Content -->
         <div style="padding:22px 28px;">
           <!-- Highlight Stats Cards -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px;">
-            <div style="background:var(--bg-input);padding:12px;border-radius:12px;border:1px solid var(--border);text-align:center;">
-              <div style="font-size:10px;color:var(--text-dim);font-weight:800;text-transform:uppercase;">Hạng</div>
-              <div id="vRank" style="margin-top:4px;"></div>
-            </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
             <div style="background:var(--bg-input);padding:12px;border-radius:12px;border:1px solid var(--border);text-align:center;">
               <div style="font-size:10px;color:var(--text-dim);font-weight:800;text-transform:uppercase;">Điểm thưởng</div>
               <div id="vPoints" style="font-size:15px;font-weight:900;color:var(--accent-light);margin-top:4px;"></div>
@@ -439,7 +405,6 @@ router.get('/', async (req, res) => {
           document.getElementById('vEmail').textContent        = d.email || 'Chưa cập nhật email';
           document.getElementById('vUid').textContent          = d.uid;
           document.getElementById('vPhone').textContent        = d.phone || 'Chưa cung cấp';
-          document.getElementById('vRank').innerHTML           = '<span class="badge-rank ' + (d.rank||'bronze').toLowerCase().replace(' ', '-') + '">' + (d.rank || 'Đồng') + '</span>';
           document.getElementById('vPoints').textContent       = Number(d.points || 0).toLocaleString('vi-VN') + ' điểm';
           document.getElementById('vStatus').innerHTML        = '<span class="badge-status ' + d.status + '">' + (d.status === 'active' ? 'Hoạt động' : 'Đã khóa') + '</span>';
           document.getElementById('vCreated').textContent      = d.created || '—';
@@ -506,7 +471,6 @@ router.get('/export.xlsx', async (req, res) => {
     { header: 'Họ tên',      key: 'name',      width: 22 },
     { header: 'Email',       key: 'email',     width: 28 },
     { header: 'Điện thoại',  key: 'phone',     width: 16 },
-    { header: 'Hạng',        key: 'rank',      width: 12 },
     { header: 'Điểm',        key: 'points',    width: 10 },
     { header: 'Trạng thái',  key: 'status',    width: 14 },
     { header: 'Ngày tạo',    key: 'createdAt', width: 14 },
@@ -521,7 +485,7 @@ router.get('/export.xlsx', async (req, res) => {
 
   users.forEach(u => {
     ws.addRow({ uid: u.uid, name: u.name, email: u.email, phone: u.phone,
-                rank: u.rank, points: u.points, status: u.status === 'active' ? 'Hoạt động' : 'Đã khóa',
+                points: u.points, status: u.status === 'active' ? 'Hoạt động' : 'Đã khóa',
                 createdAt: u.createdAt });
   });
 
