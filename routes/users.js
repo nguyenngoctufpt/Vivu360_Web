@@ -6,7 +6,6 @@ const {
   getUsers,
   toggleUserStatus,
   resetUserPassword,
-  deleteUser,
 } = require('../config/firebase');
 
 function getRankClass(rank) {
@@ -65,10 +64,6 @@ router.get('/', async (req, res) => {
             data-id="${u.uid}" data-current-status="${u.status}"
             data-tooltip="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}">
             <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}" style="width:14px;height:14px"></i>
-          </button>
-          <button class="btn btn-icon" style="color:var(--red)" data-tooltip="Xóa vĩnh viễn"
-            data-action="delete-user" data-uid="${u.uid}" data-name="${encodeURIComponent(u.name || '')}">
-            <i data-lucide="trash-2" style="width:14px;height:14px"></i>
           </button>
         </div>
       </td>
@@ -298,31 +293,7 @@ router.get('/', async (req, res) => {
       </div>
     </div>
 
-    <!-- ── MODAL XÓA NGƯỜI DÙNG ── -->
-    <div id="deleteModal" class="modal-overlay" style="display:none">
-      <div class="modal-box" style="max-width:420px;">
-        <div class="modal-header">
-          <div style="font-size:16px;font-weight:900;color:var(--text-primary);">Xóa tài khoản người dùng</div>
-          <button class="btn btn-icon modal-close" data-modal="deleteModal"><i data-lucide="x" style="width:16px;height:16px"></i></button>
-        </div>
-        <div style="padding:22px 28px;">
-          <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
-            Bạn có chắc chắn muốn xóa tài khoản của <strong id="delUserName" style="color:var(--text-primary)"></strong> không?
-          </p>
-          <p style="font-size:11px;color:var(--red);margin-top:10px;">
-            ⚠️ Thao tác này sẽ xóa vĩnh viễn dữ liệu người dùng khỏi Firebase Auth, Firestore và MongoDB.
-          </p>
-        </div>
-        <div style="padding:16px 28px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;">
-          <button class="btn btn-secondary modal-close" data-modal="deleteModal">Hủy</button>
-          <form id="deleteUserForm" method="POST" action="">
-            <button type="submit" class="btn btn-danger" style="font-size:12px;">
-              <i data-lucide="trash-2" style="width:14px;height:14px"></i> Xóa vĩnh viễn
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+
 
      
 
@@ -453,7 +424,7 @@ router.get('/', async (req, res) => {
       document.querySelectorAll('.modal-close').forEach(btn => {
         btn.addEventListener('click', () => document.getElementById(btn.dataset.modal).style.display = 'none');
       });
-      ['viewModal', 'deleteModal'].forEach(id => {
+      ['viewModal'].forEach(id => {
         const el = document.getElementById(id);
         el?.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
       });
@@ -517,18 +488,7 @@ router.get('/', async (req, res) => {
         });
       });
 
-      // ── Delete user ──
-      document.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const uid = btn.dataset.uid;
-          const name = decodeURIComponent(btn.dataset.name || '');
-          document.getElementById('delUserName').textContent = name || uid;
-          document.getElementById('deleteUserForm').action = '/users/' + uid + '/delete';
-          document.getElementById('deleteModal').style.display = 'flex';
-          if (typeof lucide !== 'undefined') lucide.createIcons();
-        });
-      });
+
     </script>
   `;
 
