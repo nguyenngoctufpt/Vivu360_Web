@@ -316,9 +316,8 @@ router.get('/', async (req, res) => {
       (function() {
         const nameInput = document.getElementById('userNameFilter');
         const statusSelect = document.getElementById('userStatusFilter');
-        const rankSelect = document.getElementById('userRankFilter');
         const tbody = document.querySelector('#usersTable tbody');
-        if (!nameInput || !statusSelect || !rankSelect || !tbody) return;
+        if (!nameInput || !statusSelect || !tbody) return;
 
         const rows = Array.from(tbody.querySelectorAll('tr[data-user-name]'));
         const resultCount = document.querySelector('.page-title p strong');
@@ -329,16 +328,13 @@ router.get('/', async (req, res) => {
         function applyUserFilters() {
           const query = normalize(nameInput.value);
           const selectedStatus = statusSelect.value;
-          const selectedRank = normalize(rankSelect.value);
           let visible = 0;
 
           rows.forEach(row => {
             const name = normalize(decodeURIComponent(row.dataset.userName || ''));
             const rowStatus = row.dataset.userStatus || '';
-            const rowRank = normalize(decodeURIComponent(row.dataset.userRank || ''));
             const matches = (!query || name.includes(query)) &&
-              (!selectedStatus || rowStatus === selectedStatus) &&
-              (!selectedRank || rowRank === selectedRank);
+              (!selectedStatus || rowStatus === selectedStatus);
             row.style.display = matches ? '' : 'none';
             if (matches) visible++;
           });
@@ -346,12 +342,11 @@ router.get('/', async (req, res) => {
           if (resultCount) resultCount.textContent = visible;
           if (searchHint) searchHint.textContent = query ? '· ' + visible + ' tên phù hợp' : '';
           const pagination = document.getElementById('paginationBar');
-          if (pagination) pagination.style.display = (query || selectedStatus || selectedRank) ? 'none' : '';
+          if (pagination) pagination.style.display = (query || selectedStatus) ? 'none' : '';
         }
 
         nameInput.addEventListener('input', applyUserFilters);
         statusSelect.addEventListener('change', applyUserFilters);
-        rankSelect.addEventListener('change', applyUserFilters);
       })();
 
       // ── Client-side Pagination ──
