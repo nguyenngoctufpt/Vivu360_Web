@@ -5,6 +5,7 @@ const { requirePermission } = require('../middleware/rbac');
 const {
   getUsers,
   deleteUser,
+  toggleUserStatus,
   resetUserPassword,
 } = require('../config/firebase');
 
@@ -53,6 +54,11 @@ router.get('/', async (req, res) => {
             data-phone="${u.phone}" data-rank="${u.rank}" data-points="${u.points}"
             data-status="${u.status}" data-created="${u.createdAt}" data-avatar="${u.avatar}">
             <i data-lucide="eye" style="width:14px;height:14px"></i>
+          </button>
+          <button class="btn btn-icon" data-action="toggle-status"
+            data-id="${u.uid}" data-current-status="${u.status}"
+            data-tooltip="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}">
+            <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}" style="width:14px;height:14px;color:${u.status === 'active' ? 'var(--yellow)' : 'var(--green)'}"></i>
           </button>
           <button class="btn btn-icon" data-tooltip="Xóa tài khoản"
             data-action="delete-user"
@@ -422,6 +428,32 @@ router.get('/', async (req, res) => {
         el?.addEventListener('click', e => { if (e.target === el) el.style.display = 'none'; });
       });
 
+      // ── Delete user ──
+      document.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const uid = btn.dataset.uid;
+          const name = btn.dataset.name || 'người dùng này';
+          document.getElementById('delUserName').textContent = name;
+          document.getElementById('deleteUserForm').action = '/users/' + uid + '/delete';
+          document.getElementById('deleteModal').style.display = 'flex';
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+      });
+
+      // ── Toggle status direct button ──
+      document.querySelectorAll('[data-action="toggle-status"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const uid = btn.dataset.id;
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/users/' + uid + '/toggle-status';
+          document.body.appendChild(form);
+          form.submit();
+        });
+      });
+
       // ── View user ──
       document.querySelectorAll('[data-action="view-user"]').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -528,6 +560,12 @@ router.get('/export.xlsx', async (req, res) => {
 // ── POST /users/:uid/reset-password ────────────────────────
 router.post('/:uid/reset-password', requirePermission('users.reset'), async (req, res) => {
   await resetUserPassword(req.params.uid);
+  res.redirect('/users?msg=updated');
+});
+
+// ── POST /users/:uid/toggle-status ──────────────────────────
+router.post('/:uid/toggle-status', requirePermission('users.ban'), async (req, res) => {
+  await toggleUserStatus(req.params.uid);
   res.redirect('/users?msg=updated');
 });
 
