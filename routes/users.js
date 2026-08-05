@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 const { requirePermission } = require('../middleware/rbac');
 const {
   getUsers,
+  deleteUser,
   resetUserPassword,
 } = require('../config/firebase');
 
@@ -52,6 +53,11 @@ router.get('/', async (req, res) => {
             data-phone="${u.phone}" data-rank="${u.rank}" data-points="${u.points}"
             data-status="${u.status}" data-created="${u.createdAt}" data-avatar="${u.avatar}">
             <i data-lucide="eye" style="width:14px;height:14px"></i>
+          </button>
+          <button class="btn btn-icon" data-tooltip="Xóa tài khoản"
+            data-action="delete-user"
+            data-uid="${u.uid}" data-name="${u.name}">
+            <i data-lucide="trash-2" style="width:14px;height:14px;color:var(--red)"></i>
           </button>
         </div>
       </td>
@@ -259,6 +265,32 @@ router.get('/', async (req, res) => {
       </div>
     </div>
 
+    <!-- ── MODAL XÁC NHẬN XÓA NGƯỜI DÙNG ── -->
+    <div id="deleteModal" class="modal-overlay" style="display:none">
+      <div class="modal-box" style="max-width:440px;">
+        <div class="modal-header" style="background:var(--red-bg);border-bottom:1px solid rgba(239,68,68,0.2);">
+          <div style="font-size:16px;font-weight:800;color:var(--red);display:flex;align-items:center;gap:8px;">
+            <i data-lucide="alert-triangle" style="width:18px;height:18px;"></i>
+            Xác nhận xóa tài khoản
+          </div>
+          <button class="btn btn-icon modal-close" data-modal="deleteModal"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+        </div>
+        <div style="padding:22px 28px;">
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+            Bạn có chắc chắn muốn xóa tài khoản <strong id="delUserName" style="color:var(--text-primary);"></strong> không? Hành động này sẽ xóa dữ liệu trên Auth, Firestore và MongoDB.
+          </p>
+        </div>
+        <div style="padding:16px 28px;border-top:1px solid var(--border);background:rgba(0,0,0,0.2);display:flex;justify-content:flex-end;gap:10px;">
+          <button class="btn btn-secondary modal-close" data-modal="deleteModal">Hủy</button>
+          <form id="deleteUserForm" method="POST" action="" style="display:inline;">
+            <button type="submit" class="btn btn-danger" style="background:var(--red);color:white;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              <i data-lucide="trash-2" style="width:14px;height:14px"></i> Đồng ý xóa
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
 
 
      
@@ -439,12 +471,8 @@ router.get('/', async (req, res) => {
           if (btnCopy) {
             btnCopy.onclick = () => {
               navigator.clipboard.writeText(d.uid);
-              btnCopy.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;color:var(--green)"></i>';
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-              setTimeout(() => {
-                btnCopy.innerHTML = '<i data-lucide="copy" style="width:12px;height:12px"></i>';
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-              }, 1500);
+              btnCopy.setAttribute('data-tooltip', 'Đã sao chép!');
+              setTimeout(() => btnCopy.setAttribute('data-tooltip', 'Sao chép UID'), 2000);
             };
           }
 
@@ -506,6 +534,12 @@ router.get('/export.xlsx', async (req, res) => {
 router.post('/:uid/reset-password', requirePermission('users.reset'), async (req, res) => {
   await resetUserPassword(req.params.uid);
   res.redirect('/users?msg=updated');
+});
+
+// ── POST /users/:uid/delete ──────────────────────────
+router.post('/:uid/delete', requirePermission('users.delete'), async (req, res) => {
+  await deleteUser(req.params.uid);
+  res.redirect('/users?msg=deleted');
 });
 
 module.exports = router;
