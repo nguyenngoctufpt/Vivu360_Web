@@ -86,8 +86,10 @@ const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
       <% } %>
       <% if (can('feedback')) { %>
       <a href="/feedback" class="sidebar-link <%= currentPath.startsWith('/feedback') ? 'active' : '' %>">
-        <i data-lucide="inbox"></i> Feedback & Ticket
-        <span class="badge">2</span>
+        <i data-lucide="inbox"></i> Feedback
+        <% if (typeof feedbackCount !== 'undefined' && feedbackCount) { %>
+          <span class="badge"><%= feedbackCount %></span>
+        <% } %>
       </a>
       <% } %>
     </nav>

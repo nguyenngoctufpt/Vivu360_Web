@@ -22,11 +22,40 @@ app.use(session({
 const { postReports, getPendingReports } = require('./config/postReports');
 
 // Inject session, path & post reports into all templates
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.currentPath = req.path;
   res.locals.pendingReports = getPendingReports();
   res.locals.pendingReportsCount = res.locals.pendingReports.length;
+
+  // Fetch unread feedback count from API (status=open, unviewed)
+  try {
+    const apiBase = process.env.API_URL || 'http://localhost:3000';
+
+    // If user is opening the feedback page, mark open feedback as viewed first
+    if (req.path && req.path.startsWith('/feedback')) {
+      try {
+        await fetch(`${apiBase}/api/feedback/mark-read`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ status: 'open' }),
+        });
+      } catch (err) {
+        // ignore mark-read failures
+      }
+    }
+
+    const resp = await fetch(`${apiBase}/api/feedback/count?status=open&unviewed=true`);
+    if (resp && resp.ok) {
+      const payload = await resp.json().catch(() => null);
+      res.locals.feedbackCount = payload && payload.success && payload.data && typeof payload.data.count === 'number' ? payload.data.count : 0;
+    } else {
+      res.locals.feedbackCount = 0;
+    }
+  } catch (e) {
+    res.locals.feedbackCount = 0;
+  }
+
   next();
 });
 
