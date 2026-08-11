@@ -6,134 +6,360 @@ function can(perm) {
   if (perms.includes('*')) return true;
   return perms.some(p => p === perm || perm.startsWith(p + '.') || p.startsWith(perm + '.'));
 }
+
 const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
 %>
+
 <aside class="sidebar">
+
   <!-- Logo -->
   <div class="sidebar-logo">
     <div class="sidebar-logo-icon">
       <i data-lucide="globe" style="color:white;width:19px;height:19px;"></i>
     </div>
+
     <div class="sidebar-logo-text">
       <h2>Vivu360</h2>
       <span>Admin Panel</span>
     </div>
   </div>
 
+
   <!-- Tổng quan -->
   <div class="sidebar-section">
     <div class="sidebar-section-title">Tổng quan</div>
+
     <nav class="sidebar-nav">
-      <a href="/dashboard" class="sidebar-link <%= currentPath.startsWith('/dashboard') ? 'active' : '' %>">
-        <i data-lucide="layout-dashboard"></i> Dashboard
+
+      <a
+        href="/dashboard"
+        class="sidebar-link <%= currentPath.startsWith('/dashboard') ? 'active' : '' %>"
+      >
+        <i data-lucide="layout-dashboard"></i>
+        Dashboard
       </a>
+
     </nav>
   </div>
 
+
   <!-- Quản lý dữ liệu -->
-  <% if (can('users.read') || can('posts') || can('chat') || isSuperAdmin) { %>
+  <% if (
+    can('users.read') ||
+    can('posts') ||
+    can('chat') ||
+    can('destinations') ||
+    isSuperAdmin
+  ) { %>
+
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Quản lý dữ liệu</div>
+
+    <div class="sidebar-section-title">
+      Quản lý dữ liệu
+    </div>
+
     <nav class="sidebar-nav">
+
+
+      <!-- Người dùng -->
       <% if (can('users.read')) { %>
-      <a href="/users" class="sidebar-link <%= currentPath.startsWith('/users') ? 'active' : '' %>">
-        <i data-lucide="users"></i> Người dùng
+
+      <a
+        href="/users"
+        class="sidebar-link <%= currentPath.startsWith('/users') ? 'active' : '' %>"
+      >
+        <i data-lucide="users"></i>
+        Người dùng
       </a>
+
       <% } %>
+
+
+      <!-- Bài viết -->
       <% if (can('posts')) { %>
-      <a href="/posts" class="sidebar-link <%= currentPath.startsWith('/posts') ? 'active' : '' %>">
-        <i data-lucide="file-text"></i> Bài viết
+
+      <a
+        href="/posts"
+        class="sidebar-link <%= currentPath.startsWith('/posts') ? 'active' : '' %>"
+      >
+        <i data-lucide="file-text"></i>
+        Bài viết
       </a>
+
       <% } %>
+
+
+      <!-- Địa điểm du lịch -->
+      <% if (can('destinations') || isSuperAdmin) { %>
+
+      <a
+        href="/destinations"
+        class="sidebar-link <%= currentPath.startsWith('/destinations') ? 'active' : '' %>"
+      >
+        <i data-lucide="map-pin"></i>
+        Địa điểm du lịch
+      </a>
+
+      <% } %>
+
+
     </nav>
   </div>
+
   <% } %>
-      <% if (can('chat')) { %>
-      <a href="/chat" class="sidebar-link <%= currentPath.startsWith('/chat') ? 'active' : '' %>">
-        <i data-lucide="shield-alert"></i> Admin Trưởng nhóm
-      </a>
-      <% } %>
+
+
+  <!-- Admin trưởng nhóm -->
+  <% if (can('chat')) { %>
+
+  <a
+    href="/chat"
+    class="sidebar-link <%= currentPath.startsWith('/chat') ? 'active' : '' %>"
+  >
+    <i data-lucide="shield-alert"></i>
+    Admin Trưởng nhóm
+  </a>
+
+  <% } %>
+
 
   <!-- Tương tác -->
   <% if (can('notifications') || can('banners')) { %>
+
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Tương tác</div>
+
+    <div class="sidebar-section-title">
+      Tương tác
+    </div>
+
     <nav class="sidebar-nav">
+
       <% if (can('notifications')) { %>
-      <a href="/notifications" class="sidebar-link <%= currentPath.startsWith('/notifications') ? 'active' : '' %>">
-        <i data-lucide="bell"></i> Push Notification
+
+      <a
+        href="/notifications"
+        class="sidebar-link <%= currentPath.startsWith('/notifications') ? 'active' : '' %>"
+      >
+        <i data-lucide="bell"></i>
+        Push Notification
       </a>
+
       <% } %>
+
+
       <% if (can('banners')) { %>
-      <a href="/banners" class="sidebar-link <%= currentPath.startsWith('/banners') ? 'active' : '' %>">
-        <i data-lucide="image"></i> Banner / Popup
+
+      <a
+        href="/banners"
+        class="sidebar-link <%= currentPath.startsWith('/banners') ? 'active' : '' %>"
+      >
+        <i data-lucide="image"></i>
+        Banner / Popup
       </a>
+
       <% } %>
+
     </nav>
   </div>
+
   <% } %>
+
 
   <!-- Giám sát -->
   <% if (can('logs') || can('feedback')) { %>
+
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Giám sát</div>
+
+    <div class="sidebar-section-title">
+      Giám sát
+    </div>
+
     <nav class="sidebar-nav">
+
       <% if (can('logs')) { %>
-      <a href="/logs" class="sidebar-link <%= currentPath.startsWith('/logs') ? 'active' : '' %>">
-        <i data-lucide="alert-triangle"></i> Error Logs
-        <span class="badge" style="background:var(--red);">3</span>
+
+      <a
+        href="/logs"
+        class="sidebar-link <%= currentPath.startsWith('/logs') ? 'active' : '' %>"
+      >
+        <i data-lucide="alert-triangle"></i>
+        Error Logs
+
+        <span
+          class="badge"
+          style="background:var(--red);"
+        >
+          3
+        </span>
       </a>
+
       <% } %>
+
+
       <% if (can('feedback')) { %>
-      <a href="/feedback" class="sidebar-link <%= currentPath.startsWith('/feedback') ? 'active' : '' %>">
-        <i data-lucide="inbox"></i> Feedback
+      <a
+        href="/feedback"
+        class="sidebar-link <%= currentPath.startsWith('/feedback') ? 'active' : '' %>"
+      >
+        <i data-lucide="inbox"></i>
+        Feedback & Ticket
+
         <% if (typeof feedbackCount !== 'undefined' && feedbackCount) { %>
           <span class="badge"><%= feedbackCount %></span>
         <% } %>
       </a>
+
       <% } %>
+
     </nav>
   </div>
+
   <% } %>
 
+
   <!-- Hệ thống -->
-  <% const canConfig = can('config.remote') || can('config.ai') || can('feature_flags') || isSuperAdmin; %>
+  <%
+    const canConfig =
+      can('config.remote') ||
+      can('config.ai') ||
+      can('feature_flags') ||
+      isSuperAdmin;
+  %>
+
   <% if (canConfig || isSuperAdmin) { %>
+
   <div class="sidebar-section">
-    <div class="sidebar-section-title">Hệ thống</div>
+
+    <div class="sidebar-section-title">
+      Hệ thống
+    </div>
+
     <nav class="sidebar-nav">
+
       <% if (canConfig) { %>
-      <a href="/config" class="sidebar-link <%= currentPath.startsWith('/config') ? 'active' : '' %>">
-        <i data-lucide="settings-2"></i> Remote Config
+
+      <a
+        href="/config"
+        class="sidebar-link <%= currentPath.startsWith('/config') ? 'active' : '' %>"
+      >
+        <i data-lucide="settings-2"></i>
+        Remote Config
       </a>
+
       <% } %>
+
+
       <% if (isSuperAdmin) { %>
-      <a href="/admins" class="sidebar-link <%= currentPath.startsWith('/admins') ? 'active' : '' %>">
-        <i data-lucide="shield-check"></i> Quản lý Admin
-        <span style="font-size:8px;font-weight:900;padding:1px 5px;border-radius:4px;background:rgba(168,85,247,0.2);color:#a855f7;border:1px solid rgba(168,85,247,0.25);margin-left:auto;">ROOT</span>
+
+      <a
+        href="/admins"
+        class="sidebar-link <%= currentPath.startsWith('/admins') ? 'active' : '' %>"
+      >
+        <i data-lucide="shield-check"></i>
+        Quản lý Admin
+
+        <span
+          style="
+            font-size:8px;
+            font-weight:900;
+            padding:1px 5px;
+            border-radius:4px;
+            background:rgba(168,85,247,0.2);
+            color:#a855f7;
+            border:1px solid rgba(168,85,247,0.25);
+            margin-left:auto;
+          "
+        >
+          ROOT
+        </span>
+
       </a>
+
       <% } %>
+
     </nav>
   </div>
+
   <% } %>
+
 
   <!-- User footer -->
   <div class="sidebar-footer">
+
     <a href="/logout" class="sidebar-user">
+
       <div class="sidebar-user-avatar">
-        <%= currentUser ? currentUser.name.charAt(0).toUpperCase() : 'A' %>
+        <%= currentUser
+          ? currentUser.name.charAt(0).toUpperCase()
+          : 'A'
+        %>
       </div>
+
+
       <div class="sidebar-user-info">
-        <div class="sidebar-user-name"><%= currentUser ? currentUser.name : 'Admin' %></div>
-        <div class="sidebar-user-role">
-          <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:<%= currentUser ? currentUser.roleColor : '#64748b' %>;flex-shrink:0;"></span>
-          <span style="color:<%= currentUser ? currentUser.roleColor : '#64748b' %>;font-weight:700;font-size:10px;">
-            <%= currentUser ? currentUser.roleLabel : 'Admin' %>
-          </span>
-          <span style="color:var(--text-dim);font-size:10px;">• Đăng xuất</span>
+
+        <div class="sidebar-user-name">
+          <%= currentUser
+            ? currentUser.name
+            : 'Admin'
+          %>
         </div>
+
+
+        <div class="sidebar-user-role">
+
+          <span
+            style="
+              display:inline-block;
+              width:5px;
+              height:5px;
+              border-radius:50%;
+              background:<%= currentUser ? currentUser.roleColor : '#64748b' %>;
+              flex-shrink:0;
+            "
+          ></span>
+
+
+          <span
+            style="
+              color:<%= currentUser ? currentUser.roleColor : '#64748b' %>;
+              font-weight:700;
+              font-size:10px;
+            "
+          >
+            <%= currentUser
+              ? currentUser.roleLabel
+              : 'Admin'
+            %>
+          </span>
+
+
+          <span
+            style="
+              color:var(--text-dim);
+              font-size:10px;
+            "
+          >
+            • Đăng xuất
+          </span>
+
+        </div>
+
       </div>
-      <i data-lucide="log-out" style="width:14px;height:14px;color:var(--text-dim);flex-shrink:0;"></i>
+
+
+      <i
+        data-lucide="log-out"
+        style="
+          width:14px;
+          height:14px;
+          color:var(--text-dim);
+          flex-shrink:0;
+        "
+      ></i>
+
     </a>
+
   </div>
+
 </aside>

@@ -49,7 +49,7 @@ function renderImages(images, postId) {
       grid-template-columns:${displayedImages.length === 1 ? '1fr' : 'repeat(2, 1fr)'};
       gap:6px;
       margin-top:12px;
-      max-width:560px;
+      max-width:420px;
     ">
       ${displayedImages.map((image, index) => `
         <div style="position:relative;">
@@ -59,7 +59,7 @@ function renderImages(images, postId) {
             loading="lazy"
             style="
               width:100%;
-              height:${displayedImages.length === 1 ? '300px' : '180px'};
+              height:${displayedImages.length === 1 ? '210px' : '130px'};
               object-fit:cover;
               border-radius:10px;
               border:1px solid var(--border);
@@ -337,7 +337,7 @@ router.get('/', async (req, res) => {
               <span>
                 <i
                   data-lucide="heart"
-                  style="width:13px;height:13px;"
+                  style="width:16px;height:16px;"
                 ></i>
                 ${likesCount}
               </span>
@@ -345,7 +345,7 @@ router.get('/', async (req, res) => {
               <span>
                 <i
                   data-lucide="message-circle"
-                  style="width:13px;height:13px;"
+                  style="width:16px;height:16px;"
                 ></i>
                 ${commentsCount}
               </span>
@@ -380,7 +380,7 @@ router.get('/', async (req, res) => {
                 >
                   <i
                     data-lucide="eye"
-                    style="width:14px;height:14px;"
+                    style="width:17px;height:17px;"
                   ></i>
                 </button>
 
@@ -438,10 +438,10 @@ router.get('/', async (req, res) => {
             }
           </td>
           <td>
-            <div style="display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;">
-              <span style="color:var(--red);"><i data-lucide="heart" style="width:11px;height:11px;"></i> ${likesCount}</span>
-              <span style="color:var(--accent-light);"><i data-lucide="message-circle" style="width:11px;height:11px;"></i> ${commentsCount}</span>
-              ${imagesCount ? `<span style="color:var(--green);"><i data-lucide="image" style="width:11px;height:11px;"></i> ${imagesCount}</span>` : ''}
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;">
+              <span style="color:var(--red);"><i data-lucide="heart" style="width:14px;height:14px;"></i> ${likesCount}</span>
+              <span style="color:var(--accent-light);"><i data-lucide="message-circle" style="width:14px;height:14px;"></i> ${commentsCount}</span>
+              ${imagesCount ? `<span style="color:var(--green);"><i data-lucide="image" style="width:14px;height:14px;"></i> ${imagesCount}</span>` : ''}
             </div>
           </td>
           <td style="font-size:11px;color:var(--text-dim);">${escapeHtml(formatDate(post.createdAt))}</td>

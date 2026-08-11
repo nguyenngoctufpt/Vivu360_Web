@@ -431,17 +431,54 @@ async function deleteMongoPost(postId, authorId) {
   });
 }
 
+// ==================== QUẢN LÝ ĐỊA ĐIỂM DU LỊCH ====================
+
+// Lấy toàn bộ địa điểm
 async function getAllMongoDestinations() {
-  const endpoints = ['/destinations?limit=100', '/tours?limit=100', '/locations?limit=100', '/places?limit=100'];
-  for (const endpoint of endpoints) {
-    const res = await request(endpoint);
-    const list = extractList(res);
-    if (list && list.length > 0) {
-      console.log(`🟢 Đã lấy thành công ${list.length} điểm đến thực tế từ MongoDB API (${endpoint})!`);
-      return list;
-    }
+  const response = await request('/diadiem');
+
+  const list = extractList(response);
+
+  if (list && list.length > 0) {
+    console.log(`🟢 Đã lấy ${list.length} địa điểm du lịch từ API /diadiem`);
+    return list;
   }
+
   return [];
+}
+
+// Lấy chi tiết một địa điểm
+async function getMongoDestinationById(id) {
+  if (!id) return null;
+
+  return request(`/diadiem/${encodeURIComponent(id)}`);
+}
+
+// Thêm địa điểm mới
+async function createMongoDestination(data) {
+  return request('/diadiem', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// Cập nhật địa điểm
+async function updateMongoDestination(id, data) {
+  if (!id) return null;
+
+  return request(`/diadiem/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+// Xóa địa điểm
+async function deleteMongoDestination(id) {
+  if (!id) return null;
+
+  return request(`/diadiem/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 async function getMongoTickets() {
@@ -485,5 +522,9 @@ module.exports = {
   getAllMongoPosts,
   deleteMongoPost,
   getAllMongoDestinations,
+  getMongoDestinationById,
+  createMongoDestination,
+  updateMongoDestination,
+  deleteMongoDestination,
   getMongoTickets,
 };

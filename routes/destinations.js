@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { requirePermission } = require('../middleware/rbac');
 const { mockDestinations, getFirestoreDestinations } = require('../config/firebase');
-const { getAllMongoDestinations } = require('../config/mongodbApi');
+const {
+  getAllMongoDestinations,
+  createMongoDestination,
+  updateMongoDestination,
+  deleteMongoDestination,
+} = require('../config/mongodbApi');
 
 // Lưu ảnh 360° theo id (in-memory)
 const tour360Images = {};
@@ -13,18 +18,51 @@ mockDestinations.forEach(d => {
 });
 
 async function getActiveDestinations() {
-  let list = [];
   try {
     const mongoList = await getAllMongoDestinations();
-    if (mongoList && mongoList.length > 0) list = mongoList;
-  } catch(e) {}
-  if (list.length === 0) {
-    try {
-      const fsList = await getFirestoreDestinations();
-      if (fsList && fsList.length > 0) list = fsList;
-    } catch(e) {}
+
+    if (mongoList && mongoList.length > 0) {
+      return mongoList.map(d => ({
+        ...d,
+
+        // Chuẩn hóa dữ liệu API DiaDiem về cấu trúc giao diện cũ
+        id: String(d._id || d.id || ''),
+
+        title: d.ten || d.name || 'Chưa có tên',
+
+        region:
+          d.viTri ||
+          d.address ||
+          d.city ||
+          'Chưa cập nhật',
+
+        type: d.category || 'destination',
+
+        rating: Number(
+          d.danhGia !== undefined
+            ? d.danhGia
+            : d.rating || 0
+        ),
+
+        price:
+          Number(d.ticketPrice || 0) > 0
+            ? Number(d.ticketPrice).toLocaleString('vi-VN') + 'đ'
+            : 'Miễn phí',
+
+        image:
+          d.hinhAnh ||
+          (Array.isArray(d.images) && d.images.length > 0
+            ? d.images[0]
+            : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80'),
+
+        status: 'active',
+      }));
+    }
+  } catch (error) {
+    console.error('Lỗi lấy địa điểm:', error);
   }
-  return list.length > 0 ? list : mockDestinations;
+
+  return [];
 }
 
 router.get('/', async (req, res) => {
@@ -86,18 +124,40 @@ router.get('/', async (req, res) => {
       </td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-icon" data-tooltip="Chỉnh sửa"
-            data-action="edit-destination"
-            data-id="${d.id}"
-            data-title="${d.title}"
-            data-region="${d.region}"
-            data-price="${d.price}"
-            data-type="${d.type}"
-            data-rating="${d.rating}"
-            data-status="${d.status}">
-            <i data-lucide="edit-3" style="width:14px;height:14px;"></i>
-          </button>
-        </div>
+
+  <!-- Nút sửa -->
+  <button class="btn btn-icon" data-tooltip="Chỉnh sửa"
+    data-action="edit-destination"
+    data-id="${d.id}"
+    data-title="${d.title}"
+    data-region="${d.region}"
+    data-price="${d.price}"
+    data-type="${d.type}"
+    data-rating="${d.rating}"
+    data-status="${d.status}">
+    <i data-lucide="edit-3" style="width:14px;height:14px;"></i>
+  </button>
+
+  <!-- Nút xóa -->
+  <form
+    method="POST"
+    action="/destinations/${d.id}/delete"
+    style="display:inline;margin:0;"
+    onsubmit="return confirm('Anh có chắc muốn xóa địa điểm: ${d.title}?');"
+  >
+    <button
+      type="submit"
+      class="btn btn-icon"
+      data-tooltip="Xóa địa điểm"
+    >
+      <i
+        data-lucide="trash-2"
+        style="width:14px;height:14px;color:var(--red);"
+      ></i>
+    </button>
+  </form>
+
+</div>
       </td>
     </tr>
   `;
@@ -108,16 +168,65 @@ router.get('/', async (req, res) => {
     <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
 
     ${msg === 'saved' ? `
-      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--green-bg);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius-sm);margin-bottom:20px;color:var(--green);font-size:13px;font-weight:600;">
-        <i data-lucide="check-circle" style="width:16px;height:16px;"></i>
-        Đã cập nhật ảnh Tour 360° thành công!
-      </div>
-    ` : ''}
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:12px 16px;
+    background:var(--green-bg);
+    border:1px solid rgba(34,197,94,0.2);
+    border-radius:var(--radius-sm);
+    margin-bottom:20px;
+    color:var(--green);
+    font-size:13px;
+    font-weight:600;
+  ">
+    <i data-lucide="check-circle" style="width:16px;height:16px;"></i>
+    Thao tác thành công!
+  </div>
+` : ''}
+
+${msg === 'deleted' ? `
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:12px 16px;
+    background:var(--green-bg);
+    border:1px solid rgba(34,197,94,0.2);
+    border-radius:var(--radius-sm);
+    margin-bottom:20px;
+    color:var(--green);
+    font-size:13px;
+    font-weight:600;
+  ">
+    <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
+    Đã xóa địa điểm thành công!
+  </div>
+` : ''}
+
+${msg === 'error' ? `
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:12px 16px;
+    border:1px solid rgba(239,68,68,0.3);
+    border-radius:var(--radius-sm);
+    margin-bottom:20px;
+    color:var(--red);
+    font-size:13px;
+    font-weight:600;
+  ">
+    <i data-lucide="alert-circle" style="width:16px;height:16px;"></i>
+    Có lỗi xảy ra. Vui lòng thử lại!
+  </div>
+` : ''}
 
     <div class="page-title-row">
       <div class="page-title">
-        <h1>Điểm đến & Tours</h1>
-        <p>Quản lý ${filtered.length}/${destinationsList.length} điểm đến — bao gồm ảnh Tour 360°</p>
+        <h1>Quản lý địa điểm du lịch</h1>
+        <p>Quản lý ${filtered.length}/${destinationsList.length} địa điểm du lịch</p>
       </div>
       <div style="display:flex;gap:12px;align-items:center;">
         <div class="filter-bar">
@@ -529,7 +638,10 @@ router.get('/', async (req, res) => {
     </script>
   `;
 
-  res.render('layouts/main', { title: 'Điểm đến & Tours', body });
+  res.render('layouts/main', {
+  title: 'Quản lý địa điểm du lịch',
+  body
+});
 });
 
 // POST /destinations/:id/save360
@@ -547,37 +659,115 @@ router.post('/:id/save360', requirePermission('destinations.write'), (req, res) 
 });
 
 // POST /destinations/:id/update
-router.post('/:id/update', requirePermission('destinations.write'), (req, res) => {
-  const id = req.params.id;
-  const dest = mockDestinations.find(d => d.id === id);
-  if (dest) {
-    dest.title = req.body.title || dest.title;
-    dest.region = req.body.region || dest.region;
-    dest.type = req.body.type || dest.type;
-    dest.price = req.body.price || dest.price;
-    dest.rating = parseFloat(req.body.rating) || dest.rating;
-    dest.status = req.body.status || dest.status;
+router.post(
+  '/:id/update',
+  requirePermission('destinations.write'),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      const numericPrice =
+  Number(
+    String(req.body.price || '')
+      .replace(/\./g, '')
+      .replace(/,/g, '')
+      .replace(/[^\d]/g, '')
+  ) || 0;
+
+const data = {
+  ten: req.body.title,
+  name: req.body.title,
+
+  viTri: req.body.region,
+  address: req.body.region,
+
+  category: req.body.type || 'destination',
+
+  danhGia: Number(req.body.rating) || 0,
+  rating: Number(req.body.rating) || 0,
+
+  ticketPrice: numericPrice,
+};
+
+      await updateMongoDestination(id, data);
+
+      res.redirect('/destinations?msg=saved');
+    } catch (error) {
+      console.error('Lỗi cập nhật địa điểm:', error);
+      res.redirect('/destinations?msg=error');
+    }
   }
-  res.redirect('/destinations?msg=saved');
-});
+);
 
 // POST /destinations/create
-router.post('/create', requirePermission('destinations.write'), (req, res) => {
-  const { title, region, type, price, rating, image } = req.body;
-  const newId = 'd' + (mockDestinations.length + 1).toString().padStart(3, '0') + '_' + Date.now();
-  mockDestinations.push({
-    id: newId,
-    title,
-    region,
-    type,
-    price,
-    rating: parseFloat(rating) || 5.0,
-    image: image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
-    status: 'active',
-    hasTour360: false,
-  });
-  tour360Images[newId] = []; // initialize 360 images array
-  res.redirect('/destinations?msg=saved');
-});
+router.post(
+  '/create',
+  requirePermission('destinations.write'),
+  async (req, res) => {
+    try {
+      const {
+        title,
+        region,
+        type,
+        price,
+        rating,
+        image,
+      } = req.body;
 
+      const numericPrice =
+        Number(
+          String(price || '')
+            .replace(/\./g, '')
+            .replace(/,/g, '')
+            .replace(/[^\d]/g, '')
+        ) || 0;
+
+      const data = {
+        ten: title,
+        viTri: region,
+
+        name: title,
+
+        address: region,
+
+        category: type || 'destination',
+
+        danhGia: Number(rating) || 0,
+
+        rating: Number(rating) || 0,
+
+        ticketPrice: numericPrice,
+
+        hinhAnh: image || '',
+
+        images: image ? [image] : [],
+      };
+
+      await createMongoDestination(data);
+
+      res.redirect('/destinations?msg=saved');
+    } catch (error) {
+      console.error('Lỗi thêm địa điểm:', error);
+      res.redirect('/destinations?msg=error');
+    }
+  }
+);
+
+// POST /destinations/:id/delete
+router.post(
+  '/:id/delete',
+  requirePermission('destinations.write'),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      await deleteMongoDestination(id);
+
+      res.redirect('/destinations?msg=deleted');
+    } catch (error) {
+      console.error('Lỗi xóa địa điểm:', error);
+      res.redirect('/destinations?msg=error');
+    }
+  }
+);
 module.exports = router;

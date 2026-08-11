@@ -286,41 +286,121 @@ async function deleteUser(uid) {
 }
 
 async function toggleUserStatus(uid) {
+  // Demo mode
   if (!isFirebaseConnected) {
     const user = mockUsers.find(u => u.uid === uid);
-    if (user) {
-      user.status = user.status === 'active' ? 'locked' : 'active';
-      user.disabled = user.status === 'locked';
+
+    if (!user) {
+      return false;
     }
+
+    user.status =
+      user.status === 'active'
+        ? 'locked'
+        : 'active';
+
+    user.disabled =
+      user.status === 'locked';
+
     return true;
   }
+
   try {
-    const docRef = db.collection('users').doc(uid);
-    const doc = await docRef.get();
-    if (doc.exists) {
-      const currentStatus = doc.data().status || 'active';
-      const newStatus = currentStatus === 'active' ? 'locked' : 'active';
-      const isDisabled = newStatus === 'locked';
-      await updateMongoAccess(uid, newStatus)
-        .catch(error => console.warn('MongoDB update status:', error.message));
-      
-      // Update Firestore user doc
-      await docRef.set({
-        status: newStatus,
-        disabled: isDisabled,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-      
-      // Sync to Firebase Auth
-      try {
-        await auth.updateUser(uid, { disabled: isDisabled });
-      } catch (authErr) {
-        console.log(`ℹ️ Không thể cập nhật trạng thái Auth cho ${uid}:`, authErr.message);
-      }
+    console.log(`🔄 Đang xử lý khóa/mở khóa UID: ${uid}`);
+
+    // ==============================
+    // 1. LẤY TRẠNG THÁI TỪ FIREBASE AUTH
+    // ==============================
+
+    const authUser = await auth.getUser(uid);
+
+    // Firebase Auth mới là nguồn chính xác nhất
+    const isCurrentlyDisabled = authUser.disabled;
+
+    const newDisabled = !isCurrentlyDisabled;
+
+    const newStatus =
+      newDisabled
+        ? 'locked'
+        : 'active';
+
+
+    // ==============================
+    // 2. KHÓA / MỞ KHÓA FIREBASE AUTH
+    // ==============================
+
+    await auth.updateUser(uid, {
+      disabled: newDisabled
+    });
+
+    console.log(
+      newDisabled
+        ? `🔒 Đã khóa Firebase Auth: ${uid}`
+        : `🔓 Đã mở khóa Firebase Auth: ${uid}`
+    );
+
+
+    // ==============================
+    // 3. ĐỒNG BỘ FIRESTORE
+    // ==============================
+
+    try {
+      await db
+        .collection('users')
+        .doc(uid)
+        .set(
+          {
+            status: newStatus,
+            disabled: newDisabled,
+            updatedAt: new Date().toISOString()
+          },
+          {
+            merge: true
+          }
+        );
+
+      console.log(
+        `🔥 Firestore status: ${newStatus}`
+      );
+
+    } catch (firestoreError) {
+
+      console.warn(
+        '⚠️ Không đồng bộ được Firestore:',
+        firestoreError.message
+      );
     }
+
+
+    // ==============================
+    // 4. ĐỒNG BỘ MONGODB NẾU CÓ
+    // ==============================
+
+    try {
+
+      await updateMongoAccess(
+        uid,
+        newStatus
+      );
+
+    } catch (mongoError) {
+
+      console.warn(
+        '⚠️ Không đồng bộ được MongoDB:',
+        mongoError.message
+      );
+    }
+
+
     return true;
+
   } catch (error) {
-    console.error(`❌ Lỗi đổi trạng thái user ${uid} trên Firestore:`, error.message);
+
+    console.error(
+      `❌ Không thể khóa/mở khóa UID ${uid}:`,
+      error.message
+    );
+
     return false;
   }
 }

@@ -60,11 +60,6 @@ router.get('/', async (req, res) => {
             data-tooltip="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}">
             <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}" style="width:14px;height:14px;color:${u.status === 'active' ? 'var(--yellow)' : 'var(--green)'}"></i>
           </button>
-          <button class="btn btn-icon" data-tooltip="Xóa tài khoản"
-            data-action="delete-user"
-            data-uid="${u.uid}" data-name="${u.name}">
-            <i data-lucide="trash-2" style="width:14px;height:14px;color:var(--red)"></i>
-          </button>
         </div>
       </td>
     </tr>`).join('');
@@ -564,10 +559,41 @@ router.post('/:uid/reset-password', requirePermission('users.reset'), async (req
 });
 
 // ── POST /users/:uid/toggle-status ──────────────────────────
-router.post('/:uid/toggle-status', requirePermission('users.ban'), async (req, res) => {
-  await toggleUserStatus(req.params.uid);
-  res.redirect('/users?msg=updated');
-});
+router.post(
+  '/:uid/toggle-status',
+  requirePermission('users.ban'),
+  async (req, res) => {
+
+    try {
+
+      const success =
+        await toggleUserStatus(req.params.uid);
+
+      if (!success) {
+
+        return res.redirect(
+          '/users?msg=error'
+        );
+
+      }
+
+      return res.redirect(
+        '/users?msg=updated'
+      );
+
+    } catch (error) {
+
+      console.error(
+        '❌ Lỗi khóa tài khoản:',
+        error
+      );
+
+      return res.redirect(
+        '/users?msg=error'
+      );
+    }
+  }
+);
 
 // ── POST /users/:uid/delete ──────────────────────────
 router.post('/:uid/delete', requirePermission('users.delete'), async (req, res) => {
