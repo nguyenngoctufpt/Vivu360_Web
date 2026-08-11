@@ -259,7 +259,7 @@ feedbackRouter.get('/', requirePermission('feedback'), async (req, res) => {
     ${msg === 'replied' ? `<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--green-bg);border:1px solid rgba(34,197,94,.2);border-radius:var(--radius-sm);margin-bottom:20px;color:var(--green);font-size:13px;font-weight:600;"><i data-lucide="check-circle" style="width:16px;height:16px"></i> Đã gửi phản hồi!</div>` : ''}
 
     <div class="page-title-row">
-      <div class="page-title"><h1>Feedback & Ticket</h1><p>Quản lý góp ý và báo cáo lỗi từ người dùng</p></div>
+      <div class="page-title"><h1>Feedback</h1><p>Quản lý góp ý và báo cáo lỗi từ người dùng</p></div>
     </div>
 
     <div class="stats-grid" style="margin-bottom:20px;">
