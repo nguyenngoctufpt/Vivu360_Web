@@ -19,13 +19,18 @@ app.use(session({
   cookie: { maxAge: 24 * 60 * 60 * 1000 },
 }));
 
-const { postReports, getPendingReports } = require('./config/postReports');
+const { getReports } = require('./config/reportsApi');
 
 // Inject session, path & post reports into all templates
 app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.currentPath = req.path;
-  res.locals.pendingReports = getPendingReports();
+  try {
+    res.locals.pendingReports = await getReports('pending');
+  } catch (error) {
+    console.warn(`Không thể tải báo cáo từ Vivu360 API: ${error.message}`);
+    res.locals.pendingReports = [];
+  }
   res.locals.pendingReportsCount = res.locals.pendingReports.length;
 
   // Fetch unread feedback count from API (status=open, unviewed)
@@ -70,6 +75,7 @@ const destinationsRoutes  = require('./routes/destinations');
 const ticketsRoutes       = require('./routes/tickets');
 const usersRoutes         = require('./routes/users');
 const postsRoutes         = require('./routes/posts');
+const reportsRoutes       = require('./routes/reports');
 const chatRoutes          = require('./routes/chat');
 const notificationsRoutes = require('./routes/notifications');
 const bannersRoutes       = require('./routes/banners');
@@ -115,6 +121,7 @@ app.use('/users', requireAuth, requirePermission('users.read'), usersRoutes);
 
 // Posts
 app.use('/posts', requireAuth, requirePermission('posts'), postsRoutes);
+app.use('/reports', requireAuth, requirePermission('posts'), reportsRoutes);
 
 // Chat
 app.use('/chat', requireAuth, requirePermission('chat'), chatRoutes);

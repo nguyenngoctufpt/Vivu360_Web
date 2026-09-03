@@ -86,6 +86,17 @@ const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
         Bài viết
       </a>
 
+      <a
+        href="/reports"
+        class="sidebar-link <%= currentPath.startsWith('/reports') ? 'active' : '' %>"
+      >
+        <i data-lucide="shield-alert"></i>
+        Báo cáo bài viết
+        <% if (typeof pendingReportsCount !== 'undefined' && pendingReportsCount > 0) { %>
+          <span class="badge"><%= pendingReportsCount %></span>
+        <% } %>
+      </a>
+
       <% } %>
 
 
@@ -202,7 +213,7 @@ const isSuperAdmin = currentUser && currentUser.role === 'super_admin';
         class="sidebar-link <%= currentPath.startsWith('/feedback') ? 'active' : '' %>"
       >
         <i data-lucide="inbox"></i>
-        Feedback & Ticket
+        Feedback
 
         <% if (typeof feedbackCount !== 'undefined' && feedbackCount) { %>
           <span class="badge"><%= feedbackCount %></span>
